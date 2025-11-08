@@ -1,0 +1,60 @@
+import yt_dlp
+import os
+from google.colab import files
+
+def download_mp3_simple(url):
+    """
+    Tải xuống âm thanh từ YouTube và chuyển đổi sang MP3.
+    """
+    
+    # 1. Định nghĩa thư mục tải xuống (tạo ra bên trong môi trường Colab)
+    DOWNLOAD_DIR = "MP3_DOWNLOADED"
+    os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+    
+    # 2. Cấu hình tùy chọn yt-dlp
+    ydl_opts = {
+        'format': 'bestaudio/best',          # Lựa chọn âm thanh chất lượng tốt nhất
+        'outtmpl': f'{DOWNLOAD_DIR}/%(title)s.%(ext)s', # Định dạng tên file
+        'postprocessors': [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'mp3',
+            'preferredquality': '192',       # Chất lượng 192kbps
+        }],
+        'ffmpeg_location': '/usr/bin/ffmpeg', # Chỉ định rõ đường dẫn FFmpeg (thường là mặc định trên Colab)
+        'quiet': False, # Hiển thị tiến trình
+    }
+
+    print(f"\n--- Đang xử lý URL: {url} ---")
+    
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            # Lấy thông tin video để biết tên file đầu ra
+            info_dict = ydl.extract_info(url, download=False)
+            video_title = info_dict.get('title', 'Video')
+            
+            # Bắt đầu tải xuống và chuyển đổi
+            ydl.download([url])
+            
+            # Xác định tên file MP3 cuối cùng
+            final_mp3_path = os.path.join(DOWNLOAD_DIR, video_title + ".mp3")
+
+            if os.path.exists(final_mp3_path):
+                print(f"\n✅ HOÀN TẤT! Đang tải file **{video_title}.mp3** về máy tính của bạn.")
+                # Sử dụng chức năng tải file của Colab
+                files.download(final_mp3_path)
+            else:
+                print(f"\n❌ Lỗi tạo file MP3. Có thể video bị giới hạn hoặc lỗi FFmpeg.")
+
+    except Exception as e:
+        print(f"\n❌ Đã xảy ra lỗi nghiêm trọng: {e}")
+        print("Vui lòng kiểm tra URL hoặc thử lại trên một Notebook Colab mới.")
+
+# --- Thực thi ---
+youtube_url = input("Vui lòng nhập YouTube URL: ")
+
+if youtube_url:
+    # Kiểm tra nhanh URL có hợp lệ không
+    if "youtube.com" in youtube_url or "youtu.be" in youtube_url:
+        download_mp3_simple(youtube_url)
+    else:
+        print("URL không phải là địa chỉ YouTube hợp lệ. Vui lòng kiểm tra lại.")
