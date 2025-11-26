@@ -1,114 +1,182 @@
 --[[ 
-    THE BLIND SURGEON - PHẪU THUẬT MÙ (QUÉT THEO DỮ LIỆU)
-    Chức năng: Không cần tên script. Quét toàn bộ RAM. 
-    Hễ thấy dữ liệu liên quan đến Farm là MỔ XẺ ngay.
+    THE BLIND SURGEON V2 - CÓ THANH TIẾN ĐỘ
+    Chức năng: Quét toàn bộ hàm trong RAM, tìm logic ẩn và lưu file
 ]]
 
-local FileName = "SURGERY_RESULT.txt"
-local HttpService = game:GetService("HttpService")
+local FileName = "SURGERY_RESULT_V2.txt"
 
--- NHỮNG "DẤU HIỆU" ĐỂ NHẬN BIẾT TEDDY HUB (DNA)
--- Chỉ cần hàm nào chứa 1 trong các từ này là bị bắt ngay
+-- 1. GIAO DIỆN TRẠNG THÁI
+local function CreateGUI()
+    local ScreenGui = Instance.new("ScreenGui")
+    local Frame = Instance.new("Frame")
+    local Title = Instance.new("TextLabel")
+    local BarContainer = Instance.new("Frame")
+    local BarFill = Instance.new("Frame")
+    local Percent = Instance.new("TextLabel")
+    local Status = Instance.new("TextLabel")
+    
+    if gethui then ScreenGui.Parent = gethui() else ScreenGui.Parent = game.CoreGui end
+    ScreenGui.Name = "SurgeonGUI"
+
+    -- Khung
+    Frame.Parent = ScreenGui
+    Frame.BackgroundColor3 = Color3.fromRGB(30, 0, 0) -- Màu đỏ sẫm
+    Frame.Position = UDim2.new(0.5, -150, 0.3, 0)
+    Frame.Size = UDim2.new(0, 300, 0, 130)
+    Frame.BorderSizePixel = 2
+    Frame.BorderColor3 = Color3.fromRGB(255, 0, 0)
+    Frame.Active = true
+    Frame.Draggable = true
+
+    -- Tiêu đề
+    Title.Parent = Frame
+    Title.BackgroundColor3 = Color3.fromRGB(180, 0, 0)
+    Title.Size = UDim2.new(1, 0, 0, 35)
+    Title.Font = Enum.Font.SourceSansBold
+    Title.Text = "  PHÒNG PHẪU THUẬT (SCANNER)"
+    Title.TextColor3 = Color3.new(1,1,1)
+    Title.TextSize = 16
+    Title.TextXAlignment = Enum.TextXAlignment.Left
+
+    -- Thanh Bar
+    BarContainer.Parent = Frame
+    BarContainer.BackgroundColor3 = Color3.fromRGB(50, 0, 0)
+    BarContainer.Position = UDim2.new(0, 10, 0, 50)
+    BarContainer.Size = UDim2.new(1, -20, 0, 20)
+    BarContainer.BorderSizePixel = 0
+
+    BarFill.Parent = BarContainer
+    BarFill.BackgroundColor3 = Color3.fromRGB(255, 0, 0) -- Đỏ tươi
+    BarFill.Size = UDim2.new(0, 0, 1, 0)
+    BarFill.BorderSizePixel = 0
+
+    Percent.Parent = BarContainer
+    Percent.BackgroundTransparency = 1
+    Percent.Size = UDim2.new(1, 0, 1, 0)
+    Percent.Font = Enum.Font.SourceSansBold
+    Percent.Text = "0%"
+    Percent.TextColor3 = Color3.new(1,1,1)
+    Percent.TextSize = 12
+    Percent.ZIndex = 2
+
+    -- Trạng thái
+    Status.Parent = Frame
+    Status.BackgroundTransparency = 1
+    Status.Position = UDim2.new(0, 10, 0, 80)
+    Status.Size = UDim2.new(1, -20, 0, 40)
+    Status.Font = Enum.Font.Code
+    Status.TextColor3 = Color3.fromRGB(200, 200, 200)
+    Status.TextSize = 12
+    Status.TextWrapped = true
+    Status.TextXAlignment = Enum.TextXAlignment.Left
+    Status.Text = "Đang chuẩn bị dao kéo..."
+
+    return {Gui=ScreenGui, Bar=BarFill, Per=Percent, Stat=Status}
+end
+
+-- 2. HÀM KIỂM TRA DNA (DẤU HIỆU)
 local TargetDNA = {
-    "CommF_", "StartQuest", "AbandonQuest", "Buso", 
-    "BuyItem", "CFrame", "Vector3", "HumanoidRootPart",
-    "Mon", "LevelQuest", "NameMon"
+    "CommF_", "StartQuest", "Buso", "BuyItem", 
+    "CFrame", "Vector3", "NameMon", "LevelQuest"
 }
 
-game:GetService("StarterGui"):SetCore("SendNotification", {
-    Title = "ĐANG PHẪU THUẬT...",
-    Text = "Đang mổ xẻ toàn bộ bộ nhớ... (Sẽ hơi lag)",
-    Duration = 10
-})
-
--- Hàm kiểm tra xem hàm này có phải mục tiêu không
 local function CheckDNA(constants)
     if not constants then return false end
-    local matchCount = 0
+    local match = 0
     for _, v in pairs(constants) do
         if type(v) == "string" then
             for _, dna in pairs(TargetDNA) do
-                if string.find(v, dna) then
-                    matchCount = matchCount + 1
-                end
+                if string.find(v, dna) then match = match + 1 end
             end
         end
     end
-    return matchCount >= 2 -- Nếu khớp 2 từ khóa trở lên thì LẤY
+    return match >= 2
 end
 
--- Hàm làm sạch dữ liệu để in
 local function Clean(v)
     if typeof(v) == "CFrame" or typeof(v) == "Vector3" then return tostring(v)
-    elseif type(v) == "table" then return "Table"
-    elseif type(v) == "function" then return "Function"
     else return tostring(v) end
 end
 
+-- 3. LOGIC QUÉT CHÍNH
 task.spawn(function()
-    if not getgc or not debug.getconstants or not debug.getupvalues then
-        game:GetService("StarterGui"):SetCore("SendNotification", {Title="LỖI", Text="Executor yếu quá!", Duration=5})
+    local UI = CreateGUI()
+    
+    if not getgc then
+        UI.Stat.Text = "LỖI: Executor không hỗ trợ getgc()!"
         return
     end
 
-    local Output = "=== KẾT QUẢ PHẪU THUẬT (KHÔNG CẦN TÊN) ===\n"
-    Output = Output .. "Time: " .. os.date("%X") .. "\n\n"
-    
-    local Count = 0
-    local Scanned = 0
-    
-    -- 1. QUÉT TOÀN BỘ HÀM TRONG BỘ NHỚ
-    for _, v in pairs(getgc()) do
-        Scanned = Scanned + 1
-        
-        -- Chỉ kiểm tra Lua Closure (Hàm do script tạo ra, không phải hàm C++ của game)
+    UI.Stat.Text = "Đang tập hợp dữ liệu RAM..."
+    wait(0.5)
+
+    -- Lấy toàn bộ objects
+    local gcList = getgc()
+    local total = #gcList
+    local Output = "=== KẾT QUẢ PHẪU THUẬT (V2) ===\nTime: " .. os.date("%X") .. "\n\n"
+    local FoundCount = 0
+
+    for i, v in ipairs(gcList) do
+        -- Cập nhật thanh tiến độ (Mỗi 1000 item cập nhật 1 lần)
+        if i % 1000 == 0 then
+            local p = i / total
+            UI.Bar:TweenSize(UDim2.new(p, 0, 1, 0), "Out", "Quad", 0.1)
+            UI.Per.Text = math.floor(p * 100) .. "%"
+            UI.Stat.Text = "Đang soi: " .. i .. " / " .. total .. " objects"
+            task.wait()
+        end
+
+        -- Kiểm tra Hàm Lua
         if type(v) == "function" and islclosure(v) and not is_synapse_function(v) then
-            
             local constants = debug.getconstants(v)
-            
-            -- Nếu hàm này có chứa DNA của Teddy Hub
             if CheckDNA(constants) then
-                Count = Count + 1
+                FoundCount = FoundCount + 1
                 local info = debug.getinfo(v)
                 
-                Output = Output .. "------------------------------------------------\n"
-                Output = Output .. "[MẪU VẬT #" .. Count .. "] Nguồn: " .. (info.source or "Ẩn danh") .. "\n"
+                Output = Output .. "--------------------------------------\n"
+                Output = Output .. "[MẪU VẬT #" .. FoundCount .. "] Nguồn: " .. (info.source or "Ẩn danh") .. "\n"
                 
-                -- PHẪU THUẬT: Lôi hết Hằng số (Constants)
-                Output = Output .. ">>> CONSTANTS (Dữ liệu tĩnh):\n"
-                for i, k in pairs(constants) do
-                    if type(k) == "string" or type(k) == "number" then
-                        Output = Output .. "    ["..i.."] " .. tostring(k) .. "\n"
+                -- In Hằng số
+                Output = Output .. ">>> CONSTANTS:\n"
+                for k, val in pairs(constants) do
+                    if type(val) == "string" or type(val) == "number" then
+                        Output = Output .. "   ["..k.."] " .. tostring(val) .. "\n"
                     end
                 end
                 
-                -- PHẪU THUẬT: Lôi hết Biến ẩn (Upvalues)
+                -- In Biến ẩn
                 local upvalues = debug.getupvalues(v)
-                Output = Output .. ">>> UPVALUES (Dữ liệu động):\n"
-                for i, u in pairs(upvalues) do
-                    Output = Output .. "    ["..i.."] " .. Clean(u) .. "\n"
+                Output = Output .. ">>> UPVALUES:\n"
+                for k, val in pairs(upvalues) do
+                    Output = Output .. "   ["..k.."] " .. Clean(val) .. "\n"
                 end
                 Output = Output .. "\n"
             end
         end
-        
-        if Scanned % 2000 == 0 then task.wait() end -- Nghỉ để không crash game
     end
+
+    -- Hoàn tất
+    UI.Bar.Size = UDim2.new(1, 0, 1, 0)
+    UI.Per.Text = "100%"
     
-    -- 2. LƯU KẾT QUẢ
-    if Count > 0 then
+    if FoundCount > 0 then
         writefile(FileName, Output)
         
-        game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "PHẪU THUẬT XONG!",
-            Text = "Đã mổ xẻ " .. Count .. " hàm quan trọng.\nFile: " .. FileName,
-            Duration = 10
-        })
+        UI.Stat.Text = "✅ XONG! Tìm thấy " .. FoundCount .. " hàm.\nĐã lưu: " .. FileName
+        UI.Stat.TextColor3 = Color3.fromRGB(0, 255, 0)
+        
+        -- Nút đóng
+        local close = Instance.new("TextButton", UI.Gui.Frame)
+        close.Size = UDim2.new(1, -20, 0, 30)
+        close.Position = UDim2.new(0, 10, 1, -35)
+        close.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+        close.Text = "ĐÓNG TOOL"
+        close.TextColor3 = Color3.new(1,1,1)
+        close.Font = Enum.Font.SourceSansBold
+        close.MouseButton1Click:Connect(function() UI.Gui:Destroy() end)
     else
-        game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "THẤT BẠI",
-            Text = "Không tìm thấy DNA nào trùng khớp.",
-            Duration = 5
-        })
+        UI.Stat.Text = "❌ Không tìm thấy gì cả!"
+        wait(3)
+        UI.Gui:Destroy()
     end
 end)
