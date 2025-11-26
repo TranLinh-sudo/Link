@@ -1,0 +1,69 @@
+--[[
+    PRE-LOAD INTERCEPTOR - CÁI BẪY HOÀN HẢO
+    Chức năng: Đứng canh cửa và tịch thu mã nguồn ngay khi nó được nạp
+]]
+
+getgenv().InterceptorActive = true
+
+local OldHttpGet = game.HttpGet
+local OldLoadstring = getgenv().loadstring
+
+game:GetService("StarterGui"):SetCore("SendNotification", {
+    Title = "BẪY ĐÃ ĐẶT!",
+    Text = "Giờ hãy chạy Script Teddy Hub đi...",
+    Duration = 5
+})
+
+-- 1. HÀM LƯU FILE
+local function SaveEvidence(type, content, url)
+    local fileName = ""
+    if type == "HTTP" then
+        -- Tạo tên file từ URL (Lấy phần cuối của link)
+        local cleanName = url:match("([^/]+)$") or "Unknown"
+        fileName = "LEAKED_HTTP_" .. cleanName .. ".txt"
+    else
+        fileName = "LEAKED_LOADSTRING_" .. math.random(1000,9999) .. ".txt"
+    end
+    
+    -- Lưu vào Workspace
+    writefile(fileName, content)
+    
+    -- Thông báo chiến tích
+    game:GetService("StarterGui"):SetCore("SendNotification", {
+        Title = "ĐÃ BẮT ĐƯỢC!",
+        Text = "Đã lưu: " .. fileName,
+        Duration = 5
+    })
+    
+    print("\n[INTERCEPTOR] Đã chặn thành công: " .. fileName)
+end
+
+-- 2. MÓC VÀO HTTPGET (Cửa ngõ tải script)
+local function NewHttpGet(self, url, ...)
+    print("[INTERCEPTOR] Script đang tải từ URL: " .. url)
+    
+    -- Gọi hàm thật để lấy nội dung
+    local content = OldHttpGet(self, url, ...)
+    
+    -- LƯU LẠI NGAY LẬP TỨC
+    if content and #content > 0 then
+        SaveEvidence("HTTP", content, url)
+    end
+    
+    return content
+end
+
+-- 3. MÓC VÀO LOADSTRING (Cửa ngõ nạp code)
+local function NewLoadstring(chunk)
+    -- Nếu chunk là code (string)
+    if type(chunk) == "string" then
+        print("[INTERCEPTOR] Script đang nạp code, độ dài: " .. #chunk)
+        SaveEvidence("LOAD", chunk, "DirectCode")
+    end
+    
+    return OldLoadstring(chunk)
+end
+
+-- KÍCH HOẠT BẪY (HOOK)
+hookfunction(game.HttpGet, NewHttpGet)
+getgenv().loadstring = NewLoadstring
