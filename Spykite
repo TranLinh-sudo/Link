@@ -1,69 +1,114 @@
---[[
-    PRE-LOAD INTERCEPTOR - CÁI BẪY HOÀN HẢO
-    Chức năng: Đứng canh cửa và tịch thu mã nguồn ngay khi nó được nạp
+--[[ 
+    THE BLIND SURGEON - PHẪU THUẬT MÙ (QUÉT THEO DỮ LIỆU)
+    Chức năng: Không cần tên script. Quét toàn bộ RAM. 
+    Hễ thấy dữ liệu liên quan đến Farm là MỔ XẺ ngay.
 ]]
 
-getgenv().InterceptorActive = true
+local FileName = "SURGERY_RESULT.txt"
+local HttpService = game:GetService("HttpService")
 
-local OldHttpGet = game.HttpGet
-local OldLoadstring = getgenv().loadstring
+-- NHỮNG "DẤU HIỆU" ĐỂ NHẬN BIẾT TEDDY HUB (DNA)
+-- Chỉ cần hàm nào chứa 1 trong các từ này là bị bắt ngay
+local TargetDNA = {
+    "CommF_", "StartQuest", "AbandonQuest", "Buso", 
+    "BuyItem", "CFrame", "Vector3", "HumanoidRootPart",
+    "Mon", "LevelQuest", "NameMon"
+}
 
 game:GetService("StarterGui"):SetCore("SendNotification", {
-    Title = "BẪY ĐÃ ĐẶT!",
-    Text = "Giờ hãy chạy Script Teddy Hub đi...",
-    Duration = 5
+    Title = "ĐANG PHẪU THUẬT...",
+    Text = "Đang mổ xẻ toàn bộ bộ nhớ... (Sẽ hơi lag)",
+    Duration = 10
 })
 
--- 1. HÀM LƯU FILE
-local function SaveEvidence(type, content, url)
-    local fileName = ""
-    if type == "HTTP" then
-        -- Tạo tên file từ URL (Lấy phần cuối của link)
-        local cleanName = url:match("([^/]+)$") or "Unknown"
-        fileName = "LEAKED_HTTP_" .. cleanName .. ".txt"
+-- Hàm kiểm tra xem hàm này có phải mục tiêu không
+local function CheckDNA(constants)
+    if not constants then return false end
+    local matchCount = 0
+    for _, v in pairs(constants) do
+        if type(v) == "string" then
+            for _, dna in pairs(TargetDNA) do
+                if string.find(v, dna) then
+                    matchCount = matchCount + 1
+                end
+            end
+        end
+    end
+    return matchCount >= 2 -- Nếu khớp 2 từ khóa trở lên thì LẤY
+end
+
+-- Hàm làm sạch dữ liệu để in
+local function Clean(v)
+    if typeof(v) == "CFrame" or typeof(v) == "Vector3" then return tostring(v)
+    elseif type(v) == "table" then return "Table"
+    elseif type(v) == "function" then return "Function"
+    else return tostring(v) end
+end
+
+task.spawn(function()
+    if not getgc or not debug.getconstants or not debug.getupvalues then
+        game:GetService("StarterGui"):SetCore("SendNotification", {Title="LỖI", Text="Executor yếu quá!", Duration=5})
+        return
+    end
+
+    local Output = "=== KẾT QUẢ PHẪU THUẬT (KHÔNG CẦN TÊN) ===\n"
+    Output = Output .. "Time: " .. os.date("%X") .. "\n\n"
+    
+    local Count = 0
+    local Scanned = 0
+    
+    -- 1. QUÉT TOÀN BỘ HÀM TRONG BỘ NHỚ
+    for _, v in pairs(getgc()) do
+        Scanned = Scanned + 1
+        
+        -- Chỉ kiểm tra Lua Closure (Hàm do script tạo ra, không phải hàm C++ của game)
+        if type(v) == "function" and islclosure(v) and not is_synapse_function(v) then
+            
+            local constants = debug.getconstants(v)
+            
+            -- Nếu hàm này có chứa DNA của Teddy Hub
+            if CheckDNA(constants) then
+                Count = Count + 1
+                local info = debug.getinfo(v)
+                
+                Output = Output .. "------------------------------------------------\n"
+                Output = Output .. "[MẪU VẬT #" .. Count .. "] Nguồn: " .. (info.source or "Ẩn danh") .. "\n"
+                
+                -- PHẪU THUẬT: Lôi hết Hằng số (Constants)
+                Output = Output .. ">>> CONSTANTS (Dữ liệu tĩnh):\n"
+                for i, k in pairs(constants) do
+                    if type(k) == "string" or type(k) == "number" then
+                        Output = Output .. "    ["..i.."] " .. tostring(k) .. "\n"
+                    end
+                end
+                
+                -- PHẪU THUẬT: Lôi hết Biến ẩn (Upvalues)
+                local upvalues = debug.getupvalues(v)
+                Output = Output .. ">>> UPVALUES (Dữ liệu động):\n"
+                for i, u in pairs(upvalues) do
+                    Output = Output .. "    ["..i.."] " .. Clean(u) .. "\n"
+                end
+                Output = Output .. "\n"
+            end
+        end
+        
+        if Scanned % 2000 == 0 then task.wait() end -- Nghỉ để không crash game
+    end
+    
+    -- 2. LƯU KẾT QUẢ
+    if Count > 0 then
+        writefile(FileName, Output)
+        
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = "PHẪU THUẬT XONG!",
+            Text = "Đã mổ xẻ " .. Count .. " hàm quan trọng.\nFile: " .. FileName,
+            Duration = 10
+        })
     else
-        fileName = "LEAKED_LOADSTRING_" .. math.random(1000,9999) .. ".txt"
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = "THẤT BẠI",
+            Text = "Không tìm thấy DNA nào trùng khớp.",
+            Duration = 5
+        })
     end
-    
-    -- Lưu vào Workspace
-    writefile(fileName, content)
-    
-    -- Thông báo chiến tích
-    game:GetService("StarterGui"):SetCore("SendNotification", {
-        Title = "ĐÃ BẮT ĐƯỢC!",
-        Text = "Đã lưu: " .. fileName,
-        Duration = 5
-    })
-    
-    print("\n[INTERCEPTOR] Đã chặn thành công: " .. fileName)
-end
-
--- 2. MÓC VÀO HTTPGET (Cửa ngõ tải script)
-local function NewHttpGet(self, url, ...)
-    print("[INTERCEPTOR] Script đang tải từ URL: " .. url)
-    
-    -- Gọi hàm thật để lấy nội dung
-    local content = OldHttpGet(self, url, ...)
-    
-    -- LƯU LẠI NGAY LẬP TỨC
-    if content and #content > 0 then
-        SaveEvidence("HTTP", content, url)
-    end
-    
-    return content
-end
-
--- 3. MÓC VÀO LOADSTRING (Cửa ngõ nạp code)
-local function NewLoadstring(chunk)
-    -- Nếu chunk là code (string)
-    if type(chunk) == "string" then
-        print("[INTERCEPTOR] Script đang nạp code, độ dài: " .. #chunk)
-        SaveEvidence("LOAD", chunk, "DirectCode")
-    end
-    
-    return OldLoadstring(chunk)
-end
-
--- KÍCH HOẠT BẪY (HOOK)
-hookfunction(game.HttpGet, NewHttpGet)
-getgenv().loadstring = NewLoadstring
+end)
