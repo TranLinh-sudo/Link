@@ -1,61 +1,53 @@
---[[ UNIVERSAL SOURCE DUMPER - PHIÊN BẢN TEDDY ]]
+--[[ 
+    CÔNG CỤ QUÉT TÊN SCRIPT (NAME SCANNER)
+    Chức năng: Liệt kê tên toàn bộ script đang chạy để tìm kẻ ẩn danh
+]]
 
--- /// CẤU HÌNH QUAN TRỌNG ///
-getgenv().TargetNameKeyword = "Teddy" -- Đã đổi thành Teddy để bắt đúng script
+local LogContent = ""
+local Count = 0
 
-local function SaveSource(name, content)
-    if not content or content == "" then return end
-    -- Tạo tên file có chữ DUMP để dễ tìm
-    local fileName = "DUMP_" .. name .. ".txt"
-    
-    writefile(fileName, content)
-    
-    game:GetService("StarterGui"):SetCore("SendNotification", {
-        Title = "ĐÃ BẮT ĐƯỢC!",
-        Text = "Đã lưu file: " .. fileName,
-        Duration = 5
-    })
-    print("\n[SUCCESS] Đã in mã nguồn: " .. fileName)
-end
+-- Thông báo bắt đầu
+game:GetService("StarterGui"):SetCore("SendNotification", {
+    Title = "ĐANG QUÉT...",
+    Text = "Vui lòng đợi, đang lập danh sách...",
+    Duration = 3
+})
 
-if not decompile then
-    game:GetService("StarterGui"):SetCore("SendNotification", {
-        Title = "LỖI",
-        Text = "Executor yếu quá, không in được!",
-        Duration = 5
-    })
-else
-    game:GetService("StarterGui"):SetCore("SendNotification", {
-        Title = "ĐANG QUÉT...",
-        Text = "Đang tìm script tên 'Teddy'...",
-        Duration = 3
-    })
-    
-    local found = false
-    -- Quét CoreGui
-    for _, v in pairs(game:GetService("CoreGui"):GetDescendants()) do
-        if (v:IsA("LocalScript") or v:IsA("ModuleScript")) and string.find(v.Name, getgenv().TargetNameKeyword) then
-            found = true
-            local s, c = pcall(function() return decompile(v) end)
-            if s then SaveSource(v.Name, c) end
-        end
-    end
-    
-    -- Quét thêm trong Player (Đề phòng nó giấu trong nhân vật)
-    for _, v in pairs(game.Players.LocalPlayer:GetDescendants()) do
-        if (v:IsA("LocalScript") or v:IsA("ModuleScript")) and string.find(v.Name, getgenv().TargetNameKeyword) then
-            found = true
-            local s, c = pcall(function() return decompile(v) end)
-            if s then SaveSource(v.Name, c) end
-        end
-    end
+print("\n========== BẮT ĐẦU QUÉT CORE GUI ==========")
 
-    if not found then
-        game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "KHÔNG TÌM THẤY",
-            Text = "Không thấy script nào tên là Teddy cả!",
-            Duration = 5
-        })
+-- 1. Quét trong CoreGui (Nơi các Hub thường trốn)
+for _, v in pairs(game:GetService("CoreGui"):GetDescendants()) do
+    if v:IsA("LocalScript") or v:IsA("ModuleScript") then
+        Count = Count + 1
+        local info = "[Script " .. Count .. "] CoreGui: " .. v:GetFullName()
+        
+        -- In ra Console F9
+        print(info)
+        
+        -- Ghi vào bộ nhớ đệm
+        LogContent = LogContent .. info .. "\n"
     end
 end
+
+-- 2. Quét trong Player (Đề phòng nó nằm trong nhân vật)
+for _, v in pairs(game.Players.LocalPlayer:GetDescendants()) do
+    if v:IsA("LocalScript") or v:IsA("ModuleScript") then
+        Count = Count + 1
+        local info = "[Script " .. Count .. "] Player: " .. v:GetFullName()
+        print(info)
+        LogContent = LogContent .. info .. "\n"
+    end
+end
+
+print("========== KẾT THÚC QUÉT ==========\n")
+
+-- 3. Lưu danh sách ra file để bạn đọc
+writefile("DANH_SACH_TEN_SCRIPT.txt", LogContent)
+
+-- Thông báo hoàn tất
+game:GetService("StarterGui"):SetCore("SendNotification", {
+    Title = "XONG!",
+    Text = "Đã lưu vào file: DANH_SACH_TEN_SCRIPT.txt",
+    Duration = 10
+})
 
