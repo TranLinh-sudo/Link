@@ -1,153 +1,122 @@
 --[[ 
-    MOBILE DUMPER PRO - CÓ THANH TIẾN ĐỘ 
-    Dev: Gemini
+    VISUAL SOURCE DUMPER - HIỆN CODE LÊN MÀN HÌNH
+    Khắc phục lỗi không tìm thấy file trên Android
 ]]
 
-local SearchKey = "2YCGftRB" -- Từ khóa bí mật cần tìm
+local SearchKey = "2YCGftRB" -- Mã Discord của Teddy Hub
 
--- 1. TẠO GIAO DIỆN (GUI)
-local CoreGui = game:GetService("CoreGui")
-local ScreenGui = Instance.new("ScreenGui")
-local MainFrame = Instance.new("Frame")
-local Title = Instance.new("TextLabel")
-local StatusText = Instance.new("TextLabel")
-local BarContainer = Instance.new("Frame")
-local BarFill = Instance.new("Frame")
-local Percentage = Instance.new("TextLabel")
-local UICorner = Instance.new("UICorner")
+-- TẠO GIAO DIỆN KẾT QUẢ
+local function ShowResult(code, path)
+    local CoreGui = game:GetService("CoreGui")
+    local ScreenGui = Instance.new("ScreenGui")
+    local MainFrame = Instance.new("Frame")
+    local Title = Instance.new("TextLabel")
+    local CodeBox = Instance.new("TextBox") -- Hộp chứa code
+    local CopyBtn = Instance.new("TextButton")
+    local CloseBtn = Instance.new("TextButton")
+    local UICorner = Instance.new("UICorner")
 
-ScreenGui.Name = "DumperGUI"
-ScreenGui.Parent = CoreGui
+    ScreenGui.Name = "VisualDumper"
+    ScreenGui.Parent = CoreGui
 
--- Khung chính
-MainFrame.Name = "MainFrame"
-MainFrame.Parent = ScreenGui
-MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-MainFrame.Position = UDim2.new(0.5, -150, 0.4, 0) -- Căn giữa
-MainFrame.Size = UDim2.new(0, 300, 0, 120)
-MainFrame.BorderSizePixel = 0
+    -- Khung chính
+    MainFrame.Name = "MainFrame"
+    MainFrame.Parent = ScreenGui
+    MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    MainFrame.Position = UDim2.new(0.1, 0, 0.1, 0)
+    MainFrame.Size = UDim2.new(0.8, 0, 0.8, 0) -- To gần hết màn hình
+    MainFrame.BorderSizePixel = 2
+    MainFrame.BorderColor3 = Color3.fromRGB(0, 255, 100)
 
-local corner = Instance.new("UICorner", MainFrame)
-corner.CornerRadius = UDim.new(0, 8)
+    -- Tiêu đề
+    Title.Parent = MainFrame
+    Title.Size = UDim2.new(1, 0, 0, 40)
+    Title.BackgroundColor3 = Color3.fromRGB(0, 255, 100)
+    Title.TextColor3 = Color3.new(0,0,0)
+    Title.Font = Enum.Font.SourceSansBold
+    Title.TextSize = 18
+    Title.Text = "  ĐÃ TÌM THẤY! (" .. path .. ")"
+    Title.TextXAlignment = Enum.TextXAlignment.Left
 
--- Tiêu đề
-Title.Parent = MainFrame
-Title.BackgroundColor3 = Color3.fromRGB(255, 170, 0) -- Màu cam
-Title.Size = UDim2.new(1, 0, 0, 30)
-Title.Font = Enum.Font.SourceSansBold
-Title.Text = "  HỆ THỐNG QUÉT SCRIPT"
-Title.TextColor3 = Color3.new(1, 1, 1)
-Title.TextSize = 16
-Title.TextXAlignment = Enum.TextXAlignment.Left
-local titleCorner = Instance.new("UICorner", Title)
-titleCorner.CornerRadius = UDim.new(0, 8)
+    -- Hộp chứa Code (Quan trọng nhất)
+    CodeBox.Parent = MainFrame
+    CodeBox.Position = UDim2.new(0, 10, 0, 50)
+    CodeBox.Size = UDim2.new(1, -20, 1, -100)
+    CodeBox.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    CodeBox.TextColor3 = Color3.fromRGB(200, 200, 200)
+    CodeBox.Font = Enum.Font.Code
+    CodeBox.TextSize = 14
+    CodeBox.TextXAlignment = Enum.TextXAlignment.Left
+    CodeBox.TextYAlignment = Enum.TextYAlignment.Top
+    CodeBox.Text = code -- Dán code vào đây
+    CodeBox.ClearTextOnFocus = false
+    CodeBox.MultiLine = true
+    CodeBox.TextEditable = false -- Chỉ đọc
 
--- Chữ trạng thái (Đang quét cái gì...)
-StatusText.Parent = MainFrame
-StatusText.BackgroundTransparency = 1
-StatusText.Position = UDim2.new(0, 10, 0, 35)
-StatusText.Size = UDim2.new(1, -20, 0, 20)
-StatusText.Font = Enum.Font.Code
-StatusText.Text = "Đang khởi tạo..."
-StatusText.TextColor3 = Color3.fromRGB(200, 200, 200)
-StatusText.TextSize = 12
-StatusText.TextXAlignment = Enum.TextXAlignment.Left
-StatusText.TextTruncate = Enum.TextTruncate.AtEnd
-
--- Khung thanh tiến độ
-BarContainer.Parent = MainFrame
-BarContainer.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-BarContainer.Position = UDim2.new(0, 10, 0, 65)
-BarContainer.Size = UDim2.new(1, -20, 0, 20)
-local barCorner = Instance.new("UICorner", BarContainer)
-barCorner.CornerRadius = UDim.new(0, 4)
-
--- Thanh chạy (Fill)
-BarFill.Parent = BarContainer
-BarFill.BackgroundColor3 = Color3.fromRGB(0, 255, 100) -- Màu xanh lá
-BarFill.Size = UDim2.new(0, 0, 1, 0) -- Bắt đầu từ 0
-local fillCorner = Instance.new("UICorner", BarFill)
-fillCorner.CornerRadius = UDim.new(0, 4)
-
--- Số %
-Percentage.Parent = BarContainer
-Percentage.BackgroundTransparency = 1
-Percentage.Size = UDim2.new(1, 0, 1, 0)
-Percentage.Font = Enum.Font.SourceSansBold
-Percentage.Text = "0%"
-Percentage.TextColor3 = Color3.new(1, 1, 1)
-Percentage.TextSize = 14
-
--- 2. CHỨC NĂNG XỬ LÝ
-local function UpdateBar(current, total, scriptName)
-    local percent = math.clamp(current / total, 0, 1)
-    BarFill:TweenSize(UDim2.new(percent, 0, 1, 0), "Out", "Quad", 0.1)
-    Percentage.Text = math.floor(percent * 100) .. "%"
-    StatusText.Text = "Scanning: " .. scriptName
-end
-
-local function SaveToFile(content)
-    local fileName = "TEDDY_HUB_SOURCE.txt"
-    writefile(fileName, content)
+    -- Nút Copy
+    CopyBtn.Parent = MainFrame
+    CopyBtn.Position = UDim2.new(0, 10, 1, -40)
+    CopyBtn.Size = UDim2.new(0.4, 0, 0, 30)
+    CopyBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+    CopyBtn.Text = "COPY TẤT CẢ"
+    CopyBtn.TextColor3 = Color3.new(1,1,1)
+    CopyBtn.Font = Enum.Font.SourceSansBold
     
-    -- Đổi màu bảng thành xanh dương báo thành công
-    Title.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
-    Title.Text = "  ✅ QUÉT THÀNH CÔNG!"
-    StatusText.Text = "Đã lưu vào file: " .. fileName
-    BarFill.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
-    
-    wait(3)
-    ScreenGui:Destroy()
-end
+    CopyBtn.MouseButton1Click:Connect(function()
+        setclipboard(code)
+        CopyBtn.Text = "ĐÃ COPY VÀO BỘ NHỚ!"
+        wait(2)
+        CopyBtn.Text = "COPY TẤT CẢ"
+    end)
 
--- 3. BẮT ĐẦU LOGIC QUÉT
-task.spawn(function()
-    wait(1) -- Chờ UI hiện lên hẳn
+    -- Nút Đóng
+    CloseBtn.Parent = MainFrame
+    CloseBtn.Position = UDim2.new(0.5, 10, 1, -40)
+    CloseBtn.Size = UDim2.new(0.4, 0, 0, 30)
+    CloseBtn.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+    CloseBtn.Text = "ĐÓNG"
+    CloseBtn.TextColor3 = Color3.new(1,1,1)
+    CloseBtn.Font = Enum.Font.SourceSansBold
     
-    -- Bước 1: Thu thập danh sách script trước
-    StatusText.Text = "Đang đếm số lượng script..."
-    local scriptList = {}
-    
-    for _, v in pairs(game:GetService("CoreGui"):GetDescendants()) do
-        if v:IsA("LocalScript") or v:IsA("ModuleScript") then
-            table.insert(scriptList, v)
-        end
-    end
-    for _, v in pairs(game.Players.LocalPlayer:GetDescendants()) do
-        if v:IsA("LocalScript") or v:IsA("ModuleScript") then
-            table.insert(scriptList, v)
-        end
-    end
-    
-    -- Bước 2: Bắt đầu quét từng cái
-    local totalScripts = #scriptList
-    local found = false
-    
-    for i, v in ipairs(scriptList) do
-        -- Cập nhật thanh tiến độ
-        UpdateBar(i, totalScripts, v.Name)
-        
-        -- Decompile và kiểm tra
-        if decompile then
-            local success, code = pcall(function() return decompile(v) end)
-            if success and string.find(code, SearchKey) then
-                -- BẮT ĐƯỢC RỒI!
-                UpdateBar(totalScripts, totalScripts, "FOUND!")
-                SaveToFile(code)
-                found = true
-                break
-            end
-        end
-        
-        -- Nghỉ cực ngắn để UI không bị đơ
-        if i % 5 == 0 then task.wait() end 
-    end
-    
-    if not found then
-        Title.BackgroundColor3 = Color3.fromRGB(255, 50, 50) -- Màu đỏ
-        Title.Text = "  ❌ THẤT BẠI"
-        StatusText.Text = "Không tìm thấy script nào!"
-        wait(3)
+    CloseBtn.MouseButton1Click:Connect(function()
         ScreenGui:Destroy()
+    end)
+end
+
+-- LOGIC QUÉT
+game:GetService("StarterGui"):SetCore("SendNotification", {
+    Title = "VISUAL SCAN",
+    Text = "Đang quét...",
+    Duration = 3
+})
+
+local found = false
+local function TryDump(v)
+    if v:IsA("LocalScript") or v:IsA("ModuleScript") then
+        local s, c = pcall(function() return decompile(v) end)
+        if s and string.find(c, SearchKey) then
+            -- Hiện bảng kết quả ngay lập tức
+            ShowResult(c, v.Name)
+            return true
+        end
     end
-end)
+    return false
+end
+
+for _, v in pairs(game:GetService("CoreGui"):GetDescendants()) do
+    if TryDump(v) then found = true; break end
+end
+
+if not found then
+    for _, v in pairs(game.Players.LocalPlayer:GetDescendants()) do
+        if TryDump(v) then found = true; break end
+    end
+end
+
+if not found then
+    game:GetService("StarterGui"):SetCore("SendNotification", {
+        Title = "THẤT BẠI",
+        Text = "Không tìm thấy script!",
+        Duration = 5
+    })
+end
