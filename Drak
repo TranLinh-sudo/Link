@@ -1,34 +1,38 @@
 --[[ 
-    ACTIVE SCRIPT EXPLORER - QUÉT SCRIPT ĐANG CHẠY
-    Chức năng: Hiện danh sách toàn bộ script để bạn tự chọn và copy
+    SCRIPT EXPLORER V2 - CÓ THANH TIẾN ĐỘ
+    Chức năng: Quét toàn bộ script và hiện danh sách để chọn
 ]]
 
--- 1. HÀM TẠO GIAO DIỆN
+-- 1. TẠO GIAO DIỆN
 local function CreateGUI()
     local CoreGui = game:GetService("CoreGui")
     local ScreenGui = Instance.new("ScreenGui")
     local MainFrame = Instance.new("Frame")
     local Title = Instance.new("TextLabel")
-    local Scroll = Instance.new("ScrollingFrame")
-    local CloseBtn = Instance.new("TextButton")
-    local ScanBtn = Instance.new("TextButton")
-    local UIList = Instance.new("UIListLayout")
+    local StatusText = Instance.new("TextLabel")
     
-    ScreenGui.Name = "ScriptExplorer"
-    if gethui then
-        ScreenGui.Parent = gethui()
-    else
-        ScreenGui.Parent = CoreGui
-    end
+    -- Phần Thanh Tiến Độ
+    local BarContainer = Instance.new("Frame")
+    local BarFill = Instance.new("Frame")
+    local PercentText = Instance.new("TextLabel")
+    
+    -- Phần Danh Sách Kết Quả
+    local Scroll = Instance.new("ScrollingFrame")
+    local UIList = Instance.new("UIListLayout")
+    local CloseBtn = Instance.new("TextButton")
+    
+    -- Tìm nơi gắn an toàn
+    ScreenGui.Name = "ScriptExplorerV2"
+    if gethui then ScreenGui.Parent = gethui() else ScreenGui.Parent = CoreGui end
 
     -- Khung chính
     MainFrame.Name = "MainFrame"
     MainFrame.Parent = ScreenGui
-    MainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
     MainFrame.Position = UDim2.new(0.5, -175, 0.2, 0)
-    MainFrame.Size = UDim2.new(0, 350, 0, 400)
+    MainFrame.Size = UDim2.new(0, 350, 0, 450)
     MainFrame.BorderSizePixel = 2
-    MainFrame.BorderColor3 = Color3.fromRGB(0, 255, 255)
+    MainFrame.BorderColor3 = Color3.fromRGB(0, 200, 255)
     MainFrame.Active = true
     MainFrame.Draggable = true
 
@@ -37,64 +41,93 @@ local function CreateGUI()
     Title.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
     Title.Size = UDim2.new(1, 0, 0, 40)
     Title.Font = Enum.Font.SourceSansBold
-    Title.Text = "  DANH SÁCH SCRIPT ĐANG CHẠY"
+    Title.Text = "  TRÌNH QUẢN LÝ SCRIPT"
     Title.TextColor3 = Color3.new(1, 1, 1)
     Title.TextSize = 16
     Title.TextXAlignment = Enum.TextXAlignment.Left
+
+    -- Thanh Tiến Độ (Container)
+    BarContainer.Parent = MainFrame
+    BarContainer.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    BarContainer.Position = UDim2.new(0, 10, 0, 50)
+    BarContainer.Size = UDim2.new(1, -20, 0, 25)
+    BarContainer.BorderSizePixel = 0
+
+    -- Thanh Fill
+    BarFill.Parent = BarContainer
+    BarFill.BackgroundColor3 = Color3.fromRGB(0, 255, 100) -- Xanh lá
+    BarFill.Size = UDim2.new(0, 0, 1, 0)
+    BarFill.BorderSizePixel = 0
+
+    -- Số %
+    PercentText.Parent = BarContainer
+    PercentText.BackgroundTransparency = 1
+    PercentText.Size = UDim2.new(1, 0, 1, 0)
+    PercentText.Font = Enum.Font.SourceSansBold
+    PercentText.Text = "0%"
+    PercentText.TextColor3 = Color3.new(1, 1, 1)
+    PercentText.TextSize = 14
+    PercentText.ZIndex = 2
+
+    -- Trạng thái text
+    StatusText.Parent = MainFrame
+    StatusText.BackgroundTransparency = 1
+    StatusText.Position = UDim2.new(0, 10, 0, 80)
+    StatusText.Size = UDim2.new(1, -20, 0, 20)
+    StatusText.Font = Enum.Font.Code
+    StatusText.Text = "Đang đếm số lượng..."
+    StatusText.TextColor3 = Color3.fromRGB(200, 200, 200)
+    StatusText.TextSize = 12
+    StatusText.TextXAlignment = Enum.TextXAlignment.Left
+
+    -- Danh sách cuộn (Ẩn lúc đầu)
+    Scroll.Parent = MainFrame
+    Scroll.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    Scroll.Position = UDim2.new(0, 10, 0, 50) -- Đè lên thanh bar khi xong
+    Scroll.Size = UDim2.new(1, -20, 1, -60)
+    Scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+    Scroll.ScrollBarThickness = 4
+    Scroll.Visible = false -- Ẩn đi để hiện thanh load trước
+
+    UIList.Parent = Scroll
+    UIList.SortOrder = Enum.SortOrder.LayoutOrder
+    UIList.Padding = UDim.new(0, 5)
 
     -- Nút Đóng
     CloseBtn.Parent = MainFrame
     CloseBtn.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
     CloseBtn.Position = UDim2.new(1, -40, 0, 0)
     CloseBtn.Size = UDim2.new(0, 40, 0, 40)
-    CloseBtn.Font = Enum.Font.SourceSansBold
     CloseBtn.Text = "X"
     CloseBtn.TextColor3 = Color3.new(1,1,1)
     CloseBtn.TextSize = 18
     CloseBtn.MouseButton1Click:Connect(function() ScreenGui:Destroy() end)
 
-    -- Khung cuộn danh sách
-    Scroll.Parent = MainFrame
-    Scroll.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-    Scroll.Position = UDim2.new(0, 10, 0, 50)
-    Scroll.Size = UDim2.new(1, -20, 1, -100)
-    Scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-    Scroll.ScrollBarThickness = 4
-
-    UIList.Parent = Scroll
-    UIList.SortOrder = Enum.SortOrder.LayoutOrder
-    UIList.Padding = UDim.new(0, 5)
-
-    -- Nút Quét Lại
-    ScanBtn.Parent = MainFrame
-    ScanBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
-    ScanBtn.Position = UDim2.new(0, 10, 1, -40)
-    ScanBtn.Size = UDim2.new(1, -20, 0, 30)
-    ScanBtn.Font = Enum.Font.SourceSansBold
-    ScanBtn.Text = "QUÉT LẠI (REFRESH)"
-    ScanBtn.TextColor3 = Color3.new(1,1,1)
-    ScanBtn.TextSize = 14
-
-    return ScreenGui, Scroll, ScanBtn
+    return {
+        GUI = ScreenGui,
+        BarFill = BarFill,
+        Percent = PercentText,
+        Status = StatusText,
+        Scroll = Scroll,
+        BarContainer = BarContainer
+    }
 end
 
--- 2. HÀM TẠO NÚT CHO MỖI SCRIPT
-local function AddScriptButton(scroll, scriptObj)
+-- 2. HÀM THÊM NÚT CHO SCRIPT
+local function AddButton(scroll, scriptObj)
     local btn = Instance.new("TextButton")
     btn.Parent = scroll
-    btn.Size = UDim2.new(1, 0, 0, 40)
+    btn.Size = UDim2.new(1, 0, 0, 45)
     btn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-    btn.Text = "  " .. scriptObj.Name .. "\n  (" .. scriptObj.ClassName .. ")"
+    btn.Text = "  " .. scriptObj.Name .. "\n  (" .. scriptObj:GetFullName() .. ")"
     btn.TextColor3 = Color3.fromRGB(200, 200, 200)
     btn.Font = Enum.Font.Code
     btn.TextSize = 12
     btn.TextXAlignment = Enum.TextXAlignment.Left
     
-    -- Khi bấm vào script
     btn.MouseButton1Click:Connect(function()
         if not decompile then
-            btn.Text = "  LỖI: KHÔNG HỖ TRỢ DECOMPILE"
-            btn.TextColor3 = Color3.new(1,0,0)
+            btn.Text = "  LỖI: KHÔNG DECOMPILE ĐƯỢC"
             return
         end
         
@@ -102,18 +135,16 @@ local function AddScriptButton(scroll, scriptObj)
         btn.BackgroundColor3 = Color3.fromRGB(200, 150, 0)
         
         spawn(function()
-            local success, code = pcall(function() return decompile(scriptObj) end)
-            if success then
-                setclipboard(code)
-                btn.Text = "  ✅ ĐÃ COPY CODE! (Dán ngay)"
-                btn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
-                btn.TextColor3 = Color3.new(1,1,1)
+            local s, c = pcall(function() return decompile(scriptObj) end)
+            if s then
+                setclipboard(c)
+                btn.Text = "  ✅ ĐÃ COPY CODE!"
+                btn.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
                 wait(2)
-                btn.Text = "  " .. scriptObj.Name .. "\n  (" .. scriptObj.ClassName .. ")"
+                btn.Text = "  " .. scriptObj.Name
                 btn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-                btn.TextColor3 = Color3.fromRGB(200, 200, 200)
             else
-                btn.Text = "  ❌ KHÔNG THỂ ĐỌC (Bị khóa)"
+                btn.Text = "  ❌ BỊ KHÓA/LỖI"
                 btn.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
             end
         end)
@@ -121,41 +152,43 @@ local function AddScriptButton(scroll, scriptObj)
 end
 
 -- 3. LOGIC QUÉT CHÍNH
-local GUI, ScrollContainer, ScanButton = CreateGUI()
+local UI = CreateGUI()
 
-local function ScanScripts()
-    -- Xóa danh sách cũ
-    for _, v in pairs(ScrollContainer:GetChildren()) do
-        if v:IsA("TextButton") then v:Destroy() end
-    end
+task.spawn(function()
+    -- Bước 1: Thu thập danh sách
+    local scripts = {}
     
-    local count = 0
-    
-    -- Quét CoreGui (Nơi chứa Hub)
+    -- Quét CoreGui
     for _, v in pairs(game:GetService("CoreGui"):GetDescendants()) do
-        if (v:IsA("LocalScript") or v:IsA("ModuleScript")) then
-            -- Lọc bớt script rác của Roblox (tên thường chứa 'Roblox' hoặc 'Core')
-            -- Nhưng nếu bạn muốn tìm kỹ thì bỏ lọc cũng được. Ở đây tôi lọc nhẹ.
-            if not string.find(v.Name, "Roblox") then
-                AddScriptButton(ScrollContainer, v)
-                count = count + 1
-            end
+        if v:IsA("LocalScript") or v:IsA("ModuleScript") then
+            if not string.find(v.Name, "Roblox") then table.insert(scripts, v) end
         end
     end
-    
     -- Quét Player
     for _, v in pairs(game.Players.LocalPlayer:GetDescendants()) do
-        if (v:IsA("LocalScript") or v:IsA("ModuleScript")) then
-            AddScriptButton(ScrollContainer, v)
-            count = count + 1
-        end
+        if v:IsA("LocalScript") or v:IsA("ModuleScript") then table.insert(scripts, v) end
     end
     
-    -- Cập nhật độ dài danh sách cuộn
-    ScrollContainer.CanvasSize = UDim2.new(0, 0, 0, count * 45)
-end
-
-ScanButton.MouseButton1Click:Connect(ScanScripts)
-
--- Tự động quét lần đầu
-ScanScripts()
+    local total = #scripts
+    
+    -- Bước 2: Xử lý từng cái (Có cập nhật thanh tiến độ)
+    for i, v in ipairs(scripts) do
+        -- Cập nhật giao diện
+        local percent = i / total
+        UI.BarFill:TweenSize(UDim2.new(percent, 0, 1, 0), "Out", "Quad", 0.05)
+        UI.Percent.Text = math.floor(percent * 100) .. "%"
+        UI.Status.Text = "Đang quét: " .. v.Name
+        
+        -- Thêm vào danh sách
+        AddButton(UI.Scroll, v)
+        
+        -- Nghỉ một chút mỗi 20 script để giao diện mượt mà, không bị đông cứng
+        if i % 20 == 0 then task.wait() end
+    end
+    
+    -- Hoàn tất
+    UI.Status.Visible = false
+    UI.BarContainer.Visible = false -- Ẩn thanh tiến độ
+    UI.Scroll.Visible = true -- Hiện danh sách
+    UI.Scroll.CanvasSize = UDim2.new(0, 0, 0, total * 50)
+end)
