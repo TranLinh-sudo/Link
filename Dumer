@@ -1,122 +1,176 @@
 --[[ 
-    VISUAL SOURCE DUMPER - HIỆN CODE LÊN MÀN HÌNH
-    Khắc phục lỗi không tìm thấy file trên Android
+    VISUAL DUMPER V3 - CÓ THANH TIẾN ĐỘ + COPY
+    Bản đầy đủ tính năng nhất
 ]]
 
-local SearchKey = "2YCGftRB" -- Mã Discord của Teddy Hub
+local SearchKey = "2YCGftRB" -- Mã Discord cần tìm
 
--- TẠO GIAO DIỆN KẾT QUẢ
-local function ShowResult(code, path)
-    local CoreGui = game:GetService("CoreGui")
-    local ScreenGui = Instance.new("ScreenGui")
-    local MainFrame = Instance.new("Frame")
-    local Title = Instance.new("TextLabel")
-    local CodeBox = Instance.new("TextBox") -- Hộp chứa code
-    local CopyBtn = Instance.new("TextButton")
-    local CloseBtn = Instance.new("TextButton")
-    local UICorner = Instance.new("UICorner")
-
-    ScreenGui.Name = "VisualDumper"
-    ScreenGui.Parent = CoreGui
-
-    -- Khung chính
-    MainFrame.Name = "MainFrame"
-    MainFrame.Parent = ScreenGui
-    MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    MainFrame.Position = UDim2.new(0.1, 0, 0.1, 0)
-    MainFrame.Size = UDim2.new(0.8, 0, 0.8, 0) -- To gần hết màn hình
-    MainFrame.BorderSizePixel = 2
-    MainFrame.BorderColor3 = Color3.fromRGB(0, 255, 100)
-
-    -- Tiêu đề
-    Title.Parent = MainFrame
-    Title.Size = UDim2.new(1, 0, 0, 40)
-    Title.BackgroundColor3 = Color3.fromRGB(0, 255, 100)
-    Title.TextColor3 = Color3.new(0,0,0)
-    Title.Font = Enum.Font.SourceSansBold
-    Title.TextSize = 18
-    Title.Text = "  ĐÃ TÌM THẤY! (" .. path .. ")"
-    Title.TextXAlignment = Enum.TextXAlignment.Left
-
-    -- Hộp chứa Code (Quan trọng nhất)
-    CodeBox.Parent = MainFrame
-    CodeBox.Position = UDim2.new(0, 10, 0, 50)
-    CodeBox.Size = UDim2.new(1, -20, 1, -100)
-    CodeBox.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-    CodeBox.TextColor3 = Color3.fromRGB(200, 200, 200)
-    CodeBox.Font = Enum.Font.Code
-    CodeBox.TextSize = 14
-    CodeBox.TextXAlignment = Enum.TextXAlignment.Left
-    CodeBox.TextYAlignment = Enum.TextYAlignment.Top
-    CodeBox.Text = code -- Dán code vào đây
-    CodeBox.ClearTextOnFocus = false
-    CodeBox.MultiLine = true
-    CodeBox.TextEditable = false -- Chỉ đọc
-
-    -- Nút Copy
-    CopyBtn.Parent = MainFrame
-    CopyBtn.Position = UDim2.new(0, 10, 1, -40)
-    CopyBtn.Size = UDim2.new(0.4, 0, 0, 30)
-    CopyBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
-    CopyBtn.Text = "COPY TẤT CẢ"
-    CopyBtn.TextColor3 = Color3.new(1,1,1)
-    CopyBtn.Font = Enum.Font.SourceSansBold
-    
-    CopyBtn.MouseButton1Click:Connect(function()
-        setclipboard(code)
-        CopyBtn.Text = "ĐÃ COPY VÀO BỘ NHỚ!"
-        wait(2)
-        CopyBtn.Text = "COPY TẤT CẢ"
-    end)
-
-    -- Nút Đóng
-    CloseBtn.Parent = MainFrame
-    CloseBtn.Position = UDim2.new(0.5, 10, 1, -40)
-    CloseBtn.Size = UDim2.new(0.4, 0, 0, 30)
-    CloseBtn.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
-    CloseBtn.Text = "ĐÓNG"
-    CloseBtn.TextColor3 = Color3.new(1,1,1)
-    CloseBtn.Font = Enum.Font.SourceSansBold
-    
-    CloseBtn.MouseButton1Click:Connect(function()
-        ScreenGui:Destroy()
-    end)
+-- 1. HÀM TÌM NƠI VẼ GUI AN TOÀN
+local function GetGuiParent()
+    if gethui then return gethui() end
+    if game:GetService("CoreGui") then return game:GetService("CoreGui") end
+    return game:GetService("Players").LocalPlayer.PlayerGui
 end
 
--- LOGIC QUÉT
-game:GetService("StarterGui"):SetCore("SendNotification", {
-    Title = "VISUAL SCAN",
-    Text = "Đang quét...",
-    Duration = 3
-})
+-- 2. TẠO GIAO DIỆN (GUI)
+local ScreenGui = Instance.new("ScreenGui")
+local MainFrame = Instance.new("Frame")
+local Title = Instance.new("TextLabel")
+local StatusText = Instance.new("TextLabel")
+local BarContainer = Instance.new("Frame")
+local BarFill = Instance.new("Frame")
+local PercentText = Instance.new("TextLabel")
+local CopyBtn = Instance.new("TextButton")
+local CloseBtn = Instance.new("TextButton")
+local UICorner = Instance.new("UICorner")
 
-local found = false
-local function TryDump(v)
-    if v:IsA("LocalScript") or v:IsA("ModuleScript") then
+ScreenGui.Name = "DumperV3"
+ScreenGui.Parent = GetGuiParent()
+
+-- Khung chính
+MainFrame.Name = "MainFrame"
+MainFrame.Parent = ScreenGui
+MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+MainFrame.Position = UDim2.new(0.5, -150, 0.35, 0) -- Căn giữa
+MainFrame.Size = UDim2.new(0, 300, 0, 160)
+MainFrame.BorderSizePixel = 2
+MainFrame.BorderColor3 = Color3.fromRGB(0, 255, 255) -- Viền xanh neon
+
+-- Tiêu đề
+Title.Parent = MainFrame
+Title.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+Title.Size = UDim2.new(1, 0, 0, 30)
+Title.Font = Enum.Font.SourceSansBold
+Title.Text = "  MÁY QUÉT MÃ NGUỒN V3"
+Title.TextColor3 = Color3.new(1, 1, 1)
+Title.TextSize = 16
+Title.TextXAlignment = Enum.TextXAlignment.Left
+
+-- Trạng thái
+StatusText.Parent = MainFrame
+StatusText.BackgroundTransparency = 1
+StatusText.Position = UDim2.new(0, 10, 0, 35)
+StatusText.Size = UDim2.new(1, -20, 0, 20)
+StatusText.Font = Enum.Font.Code
+StatusText.Text = "Đang chuẩn bị..."
+StatusText.TextColor3 = Color3.fromRGB(200, 200, 200)
+StatusText.TextSize = 12
+StatusText.TextXAlignment = Enum.TextXAlignment.Left
+StatusText.TextTruncate = Enum.TextTruncate.AtEnd
+
+-- Khung Thanh Tiến Độ
+BarContainer.Parent = MainFrame
+BarContainer.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+BarContainer.Position = UDim2.new(0, 10, 0, 60)
+BarContainer.Size = UDim2.new(1, -20, 0, 20)
+BarContainer.BorderSizePixel = 0
+
+-- Thanh Chạy (Fill)
+BarFill.Parent = BarContainer
+BarFill.BackgroundColor3 = Color3.fromRGB(0, 255, 100) -- Xanh lá
+BarFill.Size = UDim2.new(0, 0, 1, 0) -- Bắt đầu 0%
+BarFill.BorderSizePixel = 0
+
+-- Số %
+PercentText.Parent = BarContainer
+PercentText.BackgroundTransparency = 1
+PercentText.Size = UDim2.new(1, 0, 1, 0)
+PercentText.Font = Enum.Font.SourceSansBold
+PercentText.Text = "0%"
+PercentText.TextColor3 = Color3.new(1, 1, 1)
+PercentText.TextSize = 14
+PercentText.ZIndex = 2
+
+-- Nút Copy (Ẩn lúc đầu)
+CopyBtn.Parent = MainFrame
+CopyBtn.Visible = false
+CopyBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
+CopyBtn.Position = UDim2.new(0, 10, 1, -40)
+CopyBtn.Size = UDim2.new(0.6, 0, 0, 30)
+CopyBtn.Font = Enum.Font.SourceSansBold
+CopyBtn.Text = "COPY CODE NGAY"
+CopyBtn.TextColor3 = Color3.new(1,1,1)
+CopyBtn.TextSize = 14
+
+-- Nút Đóng
+CloseBtn.Parent = MainFrame
+CloseBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+CloseBtn.Position = UDim2.new(0.7, 0, 1, -40)
+CloseBtn.Size = UDim2.new(0.25, 0, 0, 30)
+CloseBtn.Font = Enum.Font.SourceSansBold
+CloseBtn.Text = "ĐÓNG"
+CloseBtn.TextColor3 = Color3.new(1,1,1)
+CloseBtn.TextSize = 12
+
+CloseBtn.MouseButton1Click:Connect(function() ScreenGui:Destroy() end)
+
+-- 3. LOGIC XỬ LÝ
+local FoundCode = ""
+
+local function UpdateProgress(current, total, name)
+    local percent = math.clamp(current / total, 0, 1)
+    BarFill:TweenSize(UDim2.new(percent, 0, 1, 0), "Out", "Quad", 0.1)
+    PercentText.Text = math.floor(percent * 100) .. "%"
+    StatusText.Text = "Checking: " .. name
+end
+
+task.spawn(function()
+    if not decompile then
+        StatusText.Text = "LỖI: Executor không hỗ trợ decompile!"
+        return
+    end
+
+    -- Bước 1: Gom danh sách script
+    StatusText.Text = "Đang thu thập danh sách script..."
+    wait(0.5)
+    
+    local scripts = {}
+    for _, v in pairs(game:GetService("CoreGui"):GetDescendants()) do
+        if v:IsA("LocalScript") or v:IsA("ModuleScript") then table.insert(scripts, v) end
+    end
+    for _, v in pairs(game.Players.LocalPlayer:GetDescendants()) do
+        if v:IsA("LocalScript") or v:IsA("ModuleScript") then table.insert(scripts, v) end
+    end
+    
+    local total = #scripts
+    local found = false
+    
+    -- Bước 2: Quét từng cái
+    for i, v in ipairs(scripts) do
+        UpdateProgress(i, total, v.Name)
+        
+        -- Giảm lag (quét 5 cái nghỉ 1 nhịp)
+        if i % 10 == 0 then task.wait() end
+        
         local s, c = pcall(function() return decompile(v) end)
         if s and string.find(c, SearchKey) then
-            -- Hiện bảng kết quả ngay lập tức
-            ShowResult(c, v.Name)
-            return true
+            FoundCode = c
+            found = true
+            
+            -- Hiệu ứng tìm thấy
+            UpdateProgress(total, total, "ĐÃ TÌM THẤY!")
+            BarFill.BackgroundColor3 = Color3.fromRGB(0, 150, 255) -- Đổi màu xanh dương
+            Title.Text = "  ✅ QUÉT THÀNH CÔNG!"
+            Title.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
+            
+            CopyBtn.Visible = true
+            CopyBtn.MouseButton1Click:Connect(function()
+                setclipboard(FoundCode)
+                CopyBtn.Text = "ĐÃ COPY!"
+                wait(1)
+                CopyBtn.Text = "COPY LẠI"
+            end)
+            
+            -- Tự copy luôn cho tiện
+            setclipboard(FoundCode)
+            break
         end
     end
-    return false
-end
-
-for _, v in pairs(game:GetService("CoreGui"):GetDescendants()) do
-    if TryDump(v) then found = true; break end
-end
-
-if not found then
-    for _, v in pairs(game.Players.LocalPlayer:GetDescendants()) do
-        if TryDump(v) then found = true; break end
+    
+    if not found then
+        StatusText.Text = "Không tìm thấy script nào chứa mã Discord này!"
+        BarFill.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+        Title.Text = "  ❌ THẤT BẠI"
+        Title.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
     end
-end
-
-if not found then
-    game:GetService("StarterGui"):SetCore("SendNotification", {
-        Title = "THẤT BẠI",
-        Text = "Không tìm thấy script!",
-        Duration = 5
-    })
-end
+end)
