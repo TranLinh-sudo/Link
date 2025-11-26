@@ -1,59 +1,61 @@
---[[
-    UNIVERSAL SOURCE DUMPER - HƯỚNG DẪN SỬ DỤNG
-]]
+--[[ UNIVERSAL SOURCE DUMPER - PHIÊN BẢN TEDDY ]]
 
--- /// CẤU HÌNH QUAN TRỌNG NHẤT ///
--- Điền 1 từ khóa có trong tên script bạn muốn in
--- Ví dụ: Script tên "Banana Hub V2" -> Điền "Banana"
-getgenv().TargetNameKeyword = "Teddy Hub" 
+-- /// CẤU HÌNH QUAN TRỌNG ///
+getgenv().TargetNameKeyword = "Teddy" -- Đã đổi thành Teddy để bắt đúng script
 
--- HÀM LƯU FILE
 local function SaveSource(name, content)
     if not content or content == "" then return end
+    -- Tạo tên file có chữ DUMP để dễ tìm
+    local fileName = "DUMP_" .. name .. ".txt"
     
-    -- Tự động đặt tên file
-    local fileName = "DUMP_" .. name .. "_" .. math.random(1,1000) .. ".txt"
-    
-    -- Lưu vào thư mục Workspace của Executor
     writefile(fileName, content)
     
-    -- Thông báo
     game:GetService("StarterGui"):SetCore("SendNotification", {
-        Title = "ĐÃ LƯU THÀNH CÔNG!",
-        Text = "Tên file: " .. fileName,
-        Duration = 10
+        Title = "ĐÃ BẮT ĐƯỢC!",
+        Text = "Đã lưu file: " .. fileName,
+        Duration = 5
     })
-    print("\n[SUCCESS] Đã lưu mã nguồn vào: " .. fileName)
+    print("\n[SUCCESS] Đã in mã nguồn: " .. fileName)
 end
 
--- QUÉT VÀ IN
 if not decompile then
     game:GetService("StarterGui"):SetCore("SendNotification", {
-        Title = "LỖI EXECUTOR",
-        Text = "Executor này không hỗ trợ lệnh 'decompile'!",
+        Title = "LỖI",
+        Text = "Executor yếu quá, không in được!",
         Duration = 5
     })
 else
-    print("--- ĐANG QUÉT ---")
-    local foundAny = false
+    game:GetService("StarterGui"):SetCore("SendNotification", {
+        Title = "ĐANG QUÉT...",
+        Text = "Đang tìm script tên 'Teddy'...",
+        Duration = 3
+    })
     
-    -- Quét CoreGui (Nơi script GUI thường nằm)
+    local found = false
+    -- Quét CoreGui
     for _, v in pairs(game:GetService("CoreGui"):GetDescendants()) do
         if (v:IsA("LocalScript") or v:IsA("ModuleScript")) and string.find(v.Name, getgenv().TargetNameKeyword) then
-            foundAny = true
-            print("--> Tìm thấy: " .. v:GetFullName())
-            
-            local success, code = pcall(function() return decompile(v) end)
-            
-            if success then
-                SaveSource(v.Name, code)
-            else
-                print("--> Lỗi: Không thể dịch ngược (Code quá nặng hoặc bị khóa).")
-            end
+            found = true
+            local s, c = pcall(function() return decompile(v) end)
+            if s then SaveSource(v.Name, c) end
         end
     end
     
-    if not foundAny then
-        print("--> Không tìm thấy script nào có tên chứa: " .. getgenv().TargetNameKeyword)
+    -- Quét thêm trong Player (Đề phòng nó giấu trong nhân vật)
+    for _, v in pairs(game.Players.LocalPlayer:GetDescendants()) do
+        if (v:IsA("LocalScript") or v:IsA("ModuleScript")) and string.find(v.Name, getgenv().TargetNameKeyword) then
+            found = true
+            local s, c = pcall(function() return decompile(v) end)
+            if s then SaveSource(v.Name, c) end
+        end
+    end
+
+    if not found then
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = "KHÔNG TÌM THẤY",
+            Text = "Không thấy script nào tên là Teddy cả!",
+            Duration = 5
+        })
     end
 end
+
