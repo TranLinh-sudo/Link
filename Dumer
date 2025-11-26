@@ -1,0 +1,65 @@
+--[[ DUMPER ĐẶC NHIỆM - BẮT SCRIPT MÃ HÓA ]]
+
+-- Từ khóa này lấy từ file log bạn gửi (dòng 2037)
+getgenv().TargetNameKeyword = "af12cab" 
+
+local function SaveSource(name, content)
+    if not content or content == "" then return end
+    
+    -- Đặt tên file dễ đọc hơn
+    local cleanName = name:gsub("[^%w]", "_") -- Loại bỏ ký tự lạ
+    local fileName = "DUMP_" .. cleanName .. ".txt"
+    
+    writefile(fileName, content)
+    
+    game:GetService("StarterGui"):SetCore("SendNotification", {
+        Title = "ĐÃ BẮT ĐƯỢC!",
+        Text = fileName,
+        Duration = 5
+    })
+    print("\n[SUCCESS] Đã lưu: " .. fileName)
+end
+
+if not decompile then
+    game:GetService("StarterGui"):SetCore("SendNotification", {
+        Title = "LỖI",
+        Text = "Executor yếu quá!",
+        Duration = 5
+    })
+else
+    game:GetService("StarterGui"):SetCore("SendNotification", {
+        Title = "ĐANG TẤN CÔNG...",
+        Text = "Đang trích xuất dữ liệu từ CoreGui...",
+        Duration = 3
+    })
+    
+    local count = 0
+    -- Quét CoreGui
+    for _, v in pairs(game:GetService("CoreGui"):GetDescendants()) do
+        -- Tìm theo tên script HOẶC tên thư mục cha (Parent)
+        if (v:IsA("LocalScript") or v:IsA("ModuleScript")) then
+            -- Kiểm tra nếu tên hoặc đường dẫn chứa mã hóa 'af12cab'
+            if string.find(v:GetFullName(), getgenv().TargetNameKeyword) then
+                count = count + 1
+                print(">> Đang giải mã: " .. v.Name)
+                
+                local s, c = pcall(function() return decompile(v) end)
+                if s then SaveSource(v.Name, c) end
+            end
+        end
+    end
+    
+    if count == 0 then
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = "KHÔNG TÌM THẤY",
+            Text = "Script đã đổi tên hoặc ẩn mình!",
+            Duration = 5
+        })
+    else
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = "HOÀN TẤT",
+            Text = "Đã dump được " .. count .. " file script!",
+            Duration = 5
+        })
+    end
+end
