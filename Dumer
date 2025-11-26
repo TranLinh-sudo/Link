@@ -1,65 +1,77 @@
---[[ DUMPER ĐẶC NHIỆM - BẮT SCRIPT MÃ HÓA ]]
+--[[ MOBILE DUMPER - LƯU FILE VÀO WORKSPACE ]]
 
--- Từ khóa này lấy từ file log bạn gửi (dòng 2037)
-getgenv().TargetNameKeyword = "af12cab" 
+-- Từ khóa: Mã mời Discord của Teddy Hub
+local SearchKey = "2YCGftRB"
 
-local function SaveSource(name, content)
-    if not content or content == "" then return end
+game:GetService("StarterGui"):SetCore("SendNotification", {
+    Title = "ĐANG QUÉT...",
+    Text = "Đang tìm và lưu file...",
+    Duration = 3
+})
+
+local function SaveToFile(scriptName, content)
+    -- Tạo tên file đẹp, dễ tìm
+    local fileName = "TEDDY_HUB_SOURCE.txt"
     
-    -- Đặt tên file dễ đọc hơn
-    local cleanName = name:gsub("[^%w]", "_") -- Loại bỏ ký tự lạ
-    local fileName = "DUMP_" .. cleanName .. ".txt"
-    
+    -- Lệnh lưu file vào bộ nhớ của Executor
     writefile(fileName, content)
     
+    -- Thông báo thành công
     game:GetService("StarterGui"):SetCore("SendNotification", {
-        Title = "ĐÃ BẮT ĐƯỢC!",
-        Text = fileName,
-        Duration = 5
+        Title = "ĐÃ LƯU FILE!",
+        Text = "Tên file: " .. fileName,
+        Duration = 10
     })
-    print("\n[SUCCESS] Đã lưu: " .. fileName)
+    
+    -- Tạo bảng thông báo trên màn hình cho chắc ăn
+    local sg = Instance.new("ScreenGui", game.CoreGui)
+    local fr = Instance.new("Frame", sg)
+    fr.Size = UDim2.new(0, 300, 0, 150)
+    fr.Position = UDim2.new(0.5, -150, 0.3, 0)
+    fr.BackgroundColor3 = Color3.fromRGB(0, 170, 0) -- Màu xanh lá đậm
+    
+    local txt = Instance.new("TextLabel", fr)
+    txt.Size = UDim2.new(1,0,1,0)
+    txt.BackgroundTransparency = 1
+    txt.TextColor3 = Color3.new(1,1,1)
+    txt.TextSize = 18
+    txt.Font = Enum.Font.SourceSansBold
+    txt.TextWrapped = true
+    txt.Text = "✅ THÀNH CÔNG!\n\nĐã lưu file: " .. fileName .. "\n\nVào thư mục 'Workspace' của Executor để lấy!"
+    
+    -- Nút đóng
+    local close = Instance.new("TextButton", fr)
+    close.Size = UDim2.new(0, 30, 0, 30)
+    close.Position = UDim2.new(1, -30, 0, 0)
+    close.BackgroundColor3 = Color3.new(1,0,0)
+    close.Text = "X"
+    close.MouseButton1Click:Connect(function() sg:Destroy() end)
 end
 
-if not decompile then
-    game:GetService("StarterGui"):SetCore("SendNotification", {
-        Title = "LỖI",
-        Text = "Executor yếu quá!",
-        Duration = 5
-    })
-else
-    game:GetService("StarterGui"):SetCore("SendNotification", {
-        Title = "ĐANG TẤN CÔNG...",
-        Text = "Đang trích xuất dữ liệu từ CoreGui...",
-        Duration = 3
-    })
-    
-    local count = 0
-    -- Quét CoreGui
-    for _, v in pairs(game:GetService("CoreGui"):GetDescendants()) do
-        -- Tìm theo tên script HOẶC tên thư mục cha (Parent)
-        if (v:IsA("LocalScript") or v:IsA("ModuleScript")) then
-            -- Kiểm tra nếu tên hoặc đường dẫn chứa mã hóa 'af12cab'
-            if string.find(v:GetFullName(), getgenv().TargetNameKeyword) then
-                count = count + 1
-                print(">> Đang giải mã: " .. v.Name)
-                
-                local s, c = pcall(function() return decompile(v) end)
-                if s then SaveSource(v.Name, c) end
-            end
+local function TryDump(v)
+    if v:IsA("LocalScript") or v:IsA("ModuleScript") then
+        local success, code = pcall(function() return decompile(v) end)
+        if success and string.find(code, SearchKey) then
+            SaveToFile(v.Name, code)
+            return true
         end
     end
-    
-    if count == 0 then
-        game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "KHÔNG TÌM THẤY",
-            Text = "Script đã đổi tên hoặc ẩn mình!",
-            Duration = 5
-        })
-    else
-        game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "HOÀN TẤT",
-            Text = "Đã dump được " .. count .. " file script!",
-            Duration = 5
-        })
+    return false
+end
+
+-- Quét CoreGui
+local found = false
+for _, v in pairs(game:GetService("CoreGui"):GetDescendants()) do
+    if TryDump(v) then found = true; break end
+end
+
+-- Quét Player
+if not found then
+    for _, v in pairs(game.Players.LocalPlayer:GetDescendants()) do
+        if TryDump(v) then found = true; break end
     end
+end
+
+if not found then
+    game:GetService("StarterGui"):SetCore("SendNotification", {Title="THẤT BẠI", Text="Không tìm thấy script!", Duration=5})
 end
