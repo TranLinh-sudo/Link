@@ -1,64 +1,170 @@
 --[[ 
-    SOURCE DOWNLOADER - TẢI CODE TỪ LINK LOADSTRING
-    Dev: Gemini
+    DATA MINER V3 - GUI & PROGRESS BAR
+    Chức năng: Quét dữ liệu Farm với giao diện trực quan
 ]]
 
--- Link gốc mà bạn đưa (Tôi đã sửa lại cho đúng định dạng Raw)
-local TargetLink = "https://raw.githubusercontent.com/Teddyseetink/Haidepzai/main/TeddyHub.lua"
+local HttpService = game:GetService("HttpService")
+local FileName = "TEDDY_DATA_FULL.txt" 
 
-game:GetService("StarterGui"):SetCore("SendNotification", {
-    Title = "ĐANG TẢI...",
-    Text = "Đang lấy mã nguồn từ Web...",
-    Duration = 3
-})
+-- 1. HÀM TẠO GIAO DIỆN
+local function CreateGUI()
+    local ScreenGui = Instance.new("ScreenGui")
+    local MainFrame = Instance.new("Frame")
+    local Title = Instance.new("TextLabel")
+    local StatusBar = Instance.new("Frame")
+    local BarFill = Instance.new("Frame")
+    local Percent = Instance.new("TextLabel")
+    local StatusText = Instance.new("TextLabel")
+    
+    ScreenGui.Name = "DataMinerGUI"
+    if gethui then ScreenGui.Parent = gethui() else ScreenGui.Parent = game.CoreGui end
 
-spawn(function()
-    -- 1. Tải nội dung từ web
-    local success, content = pcall(function()
-        return game:HttpGet(TargetLink)
-    end)
+    -- Khung chính
+    MainFrame.Parent = ScreenGui
+    MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    MainFrame.Position = UDim2.new(0.5, -150, 0.4, 0)
+    MainFrame.Size = UDim2.new(0, 300, 0, 120)
+    MainFrame.BorderSizePixel = 2
+    MainFrame.BorderColor3 = Color3.fromRGB(255, 170, 0) -- Viền cam
+    MainFrame.Active = true
+    MainFrame.Draggable = true
 
-    if success then
-        -- 2. Lưu vào file
-        local fileName = "TEDDY_SOURCE_FULL.txt"
-        writefile(fileName, content)
-        
-        -- 3. Copy vào bộ nhớ tạm luôn cho tiện
-        setclipboard(content)
+    -- Tiêu đề
+    Title.Parent = MainFrame
+    Title.BackgroundColor3 = Color3.fromRGB(255, 170, 0)
+    Title.Size = UDim2.new(1, 0, 0, 30)
+    Title.Font = Enum.Font.SourceSansBold
+    Title.Text = "  BỘ QUÉT DỮ LIỆU (MINER)"
+    Title.TextColor3 = Color3.new(1, 1, 1)
+    Title.TextSize = 16
+    Title.TextXAlignment = Enum.TextXAlignment.Left
 
-        game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "THÀNH CÔNG!",
-            Text = "Đã lưu file: " .. fileName,
-            Duration = 10
-        })
+    -- Thanh Bar Container
+    StatusBar.Parent = MainFrame
+    StatusBar.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    StatusBar.Position = UDim2.new(0, 10, 0, 50)
+    StatusBar.Size = UDim2.new(1, -20, 0, 20)
+    StatusBar.BorderSizePixel = 0
+
+    -- Thanh Bar Fill
+    BarFill.Parent = StatusBar
+    BarFill.BackgroundColor3 = Color3.fromRGB(0, 255, 100) -- Xanh lá
+    BarFill.Size = UDim2.new(0, 0, 1, 0)
+    BarFill.BorderSizePixel = 0
+
+    -- Số %
+    Percent.Parent = StatusBar
+    Percent.BackgroundTransparency = 1
+    Percent.Size = UDim2.new(1, 0, 1, 0)
+    Percent.Font = Enum.Font.SourceSansBold
+    Percent.Text = "0%"
+    Percent.TextColor3 = Color3.new(1, 1, 1)
+    Percent.TextSize = 12
+    Percent.ZIndex = 2
+
+    -- Dòng trạng thái
+    StatusText.Parent = MainFrame
+    StatusText.BackgroundTransparency = 1
+    StatusText.Position = UDim2.new(0, 10, 0, 80)
+    StatusText.Size = UDim2.new(1, -20, 0, 20)
+    StatusText.Font = Enum.Font.Code
+    StatusText.TextColor3 = Color3.fromRGB(200, 200, 200)
+    StatusText.TextSize = 12
+    StatusText.TextXAlignment = Enum.TextXAlignment.Left
+    StatusText.Text = "Đang chuẩn bị..."
+
+    return {Gui = ScreenGui, Bar = BarFill, Per = Percent, Stat = StatusText}
+end
+
+-- 2. HÀM LỌC & LÀM SẠCH
+local function CleanData(tbl)
+    local cleanTbl = {}
+    for k, v in pairs(tbl) do
+        if typeof(v) == "CFrame" then
+            cleanTbl[k] = string.format("Pos: %.1f, %.1f, %.1f", v.Position.X, v.Position.Y, v.Position.Z)
+        elseif typeof(v) == "Vector3" then
+            cleanTbl[k] = string.format("Vec3: %.1f, %.1f, %.1f", v.X, v.Y, v.Z)
+        elseif typeof(v) == "table" then
+            cleanTbl[k] = "{Table...}"
+        else
+            cleanTbl[k] = v
+        end
+    end
+    return cleanTbl
+end
+
+local function IsFarmData(tbl)
+    if type(tbl) ~= "table" then return false end
+    if rawget(tbl, "Mon") or rawget(tbl, "NameMon") or rawget(tbl, "LevelQuest") then return true end
+    return false
+end
+
+-- 3. LOGIC QUÉT CHÍNH
+task.spawn(function()
+    local UI = CreateGUI()
+    
+    if not getgc then
+        UI.Stat.Text = "LỖI: Executor không hỗ trợ getgc()!"
+        UI.Stat.TextColor3 = Color3.new(1,0,0)
+        return
+    end
+
+    UI.Stat.Text = "Đang thu thập dữ liệu RAM..."
+    wait(0.5)
+
+    -- Lấy toàn bộ objects trong RAM (Có thể lên tới 100.000 objects)
+    local gcObjects = getgc(true)
+    local total = #gcObjects
+    local foundCount = 0
+    local outputData = "=== DỮ LIỆU TEDDY HUB ===\n\n"
+
+    -- Bắt đầu quét từng cái
+    for i, v in ipairs(gcObjects) do
+        -- Cập nhật thanh tiến độ (Mỗi 500 items cập nhật 1 lần để đỡ lag)
+        if i % 500 == 0 then
+            local p = i / total
+            UI.Bar.TweenSize(UI.Bar, UDim2.new(p, 0, 1, 0), "Out", "Quad", 0.1)
+            UI.Per.Text = math.floor(p * 100) .. "%"
+            UI.Stat.Text = "Đang quét: " .. i .. " / " .. total .. " objects"
+            task.wait() -- Nghỉ 1 nhịp để game thở
+        end
+
+        if type(v) == "table" and IsFarmData(v) then
+            foundCount = foundCount + 1
+            local clean = CleanData(v)
+            
+            outputData = outputData .. "--- [DATA #" .. foundCount .. "] ---\n"
+            for key, val in pairs(clean) do
+                outputData = outputData .. tostring(key) .. ": " .. tostring(val) .. "\n"
+            end
+            outputData = outputData .. "\n"
+        end
+    end
+
+    -- Hoàn tất
+    UI.Bar.Size = UDim2.new(1, 0, 1, 0)
+    UI.Per.Text = "100%"
+    
+    if foundCount > 0 then
+        writefile(FileName, outputData)
         
-        -- 4. Hiện bảng thông báo xác nhận
-        local sg = Instance.new("ScreenGui", game.CoreGui)
-        local fr = Instance.new("Frame", sg)
-        fr.Size = UDim2.new(0, 300, 0, 150)
-        fr.Position = UDim2.new(0.5, -150, 0.3, 0)
-        fr.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
+        UI.Stat.Text = "✅ XONG! Tìm thấy " .. foundCount .. " bảng dữ liệu."
+        UI.Stat.TextColor3 = Color3.fromRGB(0, 255, 100)
         
-        local txt = Instance.new("TextLabel", fr)
-        txt.Size = UDim2.new(1,0,1,0)
-        txt.BackgroundTransparency = 1
-        txt.Text = "✅ ĐÃ TẢI MÃ NGUỒN!\n\n1. Đã lưu vào file 'TEDDY_SOURCE_FULL.txt'\n2. Đã Copy vào bộ nhớ tạm.\n\nRa ngoài Dán (Paste) ngay!"
-        txt.TextColor3 = Color3.new(1,1,1)
-        txt.TextSize = 16
-        txt.TextWrapped = true
-        txt.Font = Enum.Font.SourceSansBold
-        
-        local close = Instance.new("TextButton", fr)
-        close.Size = UDim2.new(0, 30, 0, 30)
-        close.Position = UDim2.new(1, -30, 0, 0)
-        close.Text = "X"
-        close.BackgroundColor3 = Color3.new(1,0,0)
-        close.MouseButton1Click:Connect(function() sg:Destroy() end)
+        -- Nút đóng
+        local close = Instance.new("TextButton", UI.Gui.MainFrame)
+        close.Size = UDim2.new(1, -20, 0, 30)
+        close.Position = UDim2.new(0, 10, 1, -35)
+        close.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+        close.Text = "ĐÓNG & MỞ FILE MANAGER"
+        close.TextColor3 = Color3.new(1,1,1)
+        close.Font = Enum.Font.SourceSansBold
+        close.TextSize = 14
+        close.MouseButton1Click:Connect(function() UI.Gui:Destroy() end)
     else
-        game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "LỖI",
-            Text = "Link bị hỏng hoặc không truy cập được!",
-            Duration = 5
-        })
+        UI.Stat.Text = "❌ Không tìm thấy dữ liệu nào!"
+        UI.Stat.TextColor3 = Color3.fromRGB(255, 50, 50)
+        wait(3)
+        UI.Gui:Destroy()
     end
 end)
