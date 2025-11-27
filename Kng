@@ -1,56 +1,99 @@
 --[[ 
-    DATA MINER V5 - UPVALUE SCANNER (QUÉT SÂU)
-    Chức năng: Móc túi các hàm (Function) để tìm dữ liệu bị giấu.
+    DATA MINER V5 PRO - UPVALUE SCANNER + PROGRESS BAR
+    Chức năng: Quét sâu vào hàm số, hiện thanh tiến độ và % chi tiết.
 ]]
 
 local HttpService = game:GetService("HttpService")
 local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
 local FileName = "TEDDY_DEEP_DATA.txt"
 
--- GIAO DIỆN
+-- 1. GIAO DIỆN TRẠNG THÁI (HUD PRO)
 local ScreenGui = Instance.new("ScreenGui")
 local MainFrame = Instance.new("Frame")
 local Title = Instance.new("TextLabel")
 local StatusLabel = Instance.new("TextLabel")
+local BarContainer = Instance.new("Frame")
+local BarFill = Instance.new("Frame")
+local PercentText = Instance.new("TextLabel")
 local CloseBtn = Instance.new("TextButton")
 
 if gethui then ScreenGui.Parent = gethui() else ScreenGui.Parent = game.CoreGui end
-ScreenGui.Name = "DeepMiner"
+ScreenGui.Name = "DeepMinerPro"
 
+-- Khung chính
 MainFrame.Parent = ScreenGui
-MainFrame.BackgroundColor3 = Color3.fromRGB(40, 0, 60) -- Màu tím đậm
+MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
 MainFrame.Position = UDim2.new(0.5, -150, 0.1, 0)
-MainFrame.Size = UDim2.new(0, 300, 0, 120)
+MainFrame.Size = UDim2.new(0, 300, 0, 130)
 MainFrame.BorderSizePixel = 2
-MainFrame.BorderColor3 = Color3.fromRGB(255, 0, 255)
+MainFrame.BorderColor3 = Color3.fromRGB(170, 0, 255) -- Viền tím neon
+MainFrame.Active = true
+MainFrame.Draggable = true
 
+-- Tiêu đề
 Title.Parent = MainFrame
+Title.BackgroundTransparency = 1
 Title.Size = UDim2.new(1, 0, 0, 30)
-Title.BackgroundColor3 = Color3.fromRGB(100, 0, 150)
-Title.Text = "QUÉT SÂU (UPVALUES)"
-Title.TextColor3 = Color3.new(1,1,1)
+Title.Text = "QUÉT SÂU UPVALUES (V5)"
+Title.TextColor3 = Color3.fromRGB(170, 0, 255)
 Title.Font = Enum.Font.SourceSansBold
-Title.TextSize = 16
+Title.TextSize = 18
 
+-- Trạng thái
 StatusLabel.Parent = MainFrame
-StatusLabel.Position = UDim2.new(0, 10, 0, 40)
-StatusLabel.Size = UDim2.new(1, -20, 0, 40)
 StatusLabel.BackgroundTransparency = 1
-StatusLabel.Text = "Đang lục soát các hàm..."
-StatusLabel.TextColor3 = Color3.fromRGB(255, 200, 255)
-StatusLabel.TextWrapped = true
+StatusLabel.Position = UDim2.new(0, 10, 0, 35)
+StatusLabel.Size = UDim2.new(1, -20, 0, 35)
+StatusLabel.Text = "Đang khởi tạo..."
+StatusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 StatusLabel.Font = Enum.Font.Code
 StatusLabel.TextSize = 13
+StatusLabel.TextWrapped = true
+StatusLabel.TextXAlignment = Enum.TextXAlignment.Left
 
+-- Thanh chứa
+BarContainer.Parent = MainFrame
+BarContainer.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+BarContainer.Position = UDim2.new(0, 10, 0, 80)
+BarContainer.Size = UDim2.new(1, -20, 0, 15)
+BarContainer.BorderSizePixel = 0
+
+-- Thanh chạy
+BarFill.Parent = BarContainer
+BarFill.BackgroundColor3 = Color3.fromRGB(170, 0, 255) -- Tím
+BarFill.Size = UDim2.new(0, 0, 1, 0)
+BarFill.BorderSizePixel = 0
+
+-- Số %
+PercentText.Parent = BarContainer
+PercentText.BackgroundTransparency = 1
+PercentText.Size = UDim2.new(1, 0, 1, 0)
+PercentText.Font = Enum.Font.SourceSansBold
+PercentText.Text = "0%"
+PercentText.TextColor3 = Color3.new(1, 1, 1)
+PercentText.TextSize = 12
+PercentText.ZIndex = 2
+
+-- Nút Đóng
 CloseBtn.Parent = MainFrame
+CloseBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
 CloseBtn.Position = UDim2.new(0, 0, 1, -30)
 CloseBtn.Size = UDim2.new(1, 0, 0, 30)
-CloseBtn.BackgroundColor3 = Color3.fromRGB(150, 0, 50)
-CloseBtn.Text = "ĐÓNG"
+CloseBtn.Text = "HỦY / ĐÓNG"
 CloseBtn.TextColor3 = Color3.new(1,1,1)
+CloseBtn.Font = Enum.Font.SourceSansBold
 CloseBtn.MouseButton1Click:Connect(function() ScreenGui:Destroy() end)
 
--- HÀM KIỂM TRA DỮ LIỆU
+-- 2. HÀM LÀM SẠCH DỮ LIỆU
+local function Clean(v)
+    if typeof(v) == "CFrame" then return tostring(v)
+    elseif typeof(v) == "Vector3" then return tostring(v)
+    elseif type(v) == "table" then return "{Table...}"
+    else return tostring(v) end
+end
+
+-- 3. HÀM KIỂM TRA DỮ LIỆU (TARGET)
 local function IsTarget(val)
     if type(val) == "string" then
         -- Tìm các từ khóa cứng
@@ -63,7 +106,6 @@ local function IsTarget(val)
             if type(v) == "string" and (string.find(v, "Bandit") or string.find(v, "Quest")) then
                 return true
             end
-            -- Nếu key là tên biến quan trọng
             if tostring(k) == "Mon" or tostring(k) == "CFrameQuest" then
                 return true
             end
@@ -72,36 +114,38 @@ local function IsTarget(val)
     return false
 end
 
--- HÀM LÀM SẠCH
-local function Clean(v)
-    if typeof(v) == "CFrame" then return tostring(v)
-    elseif typeof(v) == "Vector3" then return tostring(v)
-    elseif type(v) == "table" then return "{Table...}"
-    else return tostring(v) end
-end
-
+-- 4. LOGIC QUÉT CHÍNH
 task.spawn(function()
     if not debug.getupvalues or not getgc then
-        StatusLabel.Text = "LỖI: Executor không hỗ trợ debug.getupvalues!"
+        StatusLabel.Text = "❌ LỖI: Executor yếu quá!"
+        StatusLabel.TextColor3 = Color3.new(1,0,0)
         return
     end
+
+    StatusLabel.Text = "Đang tập hợp dữ liệu RAM..."
+    RunService.Heartbeat:Wait()
 
     local Output = "=== DỮ LIỆU TÌM ĐƯỢC TỪ UPVALUES ===\n\n"
     local FoundCount = 0
     local Scanned = 0
     
-    -- Lấy tất cả đối tượng
+    -- Lấy tất cả đối tượng (Có thể lag 1 giây)
     local gcObjects = getgc()
     local total = #gcObjects
     
     for i, func in pairs(gcObjects) do
         Scanned = Scanned + 1
+        
+        -- Cập nhật giao diện (Mỗi 500 cái cập nhật 1 lần)
         if Scanned % 500 == 0 then
-            StatusLabel.Text = "Đang soi: " .. Scanned .. " / " .. total .. "\n(Hàm chức năng)"
+            local p = Scanned / total
+            BarFill:TweenSize(UDim2.new(p, 0, 1, 0), "Out", "Linear", 0.1)
+            PercentText.Text = math.floor(p * 100) .. "%"
+            StatusLabel.Text = string.format("Đang soi hàm: %d / %d\nTìm thấy: %d dữ liệu", Scanned, total, FoundCount)
             RunService.Heartbeat:Wait()
         end
 
-        -- Chỉ kiểm tra nếu nó là Hàm (Function) và là Lua Script (không phải C++)
+        -- Chỉ kiểm tra Hàm Lua
         if type(func) == "function" and islclosure(func) and not is_synapse_function(func) then
             local upvalues = debug.getupvalues(func)
             
@@ -110,7 +154,7 @@ task.spawn(function()
                     FoundCount = FoundCount + 1
                     
                     -- Lưu lại
-                    Output = Output .. "--- [TÌM THẤY TRONG HÀM #" .. i .. "] ---\n"
+                    Output = Output .. "--- [TRONG HÀM #" .. i .. "] ---\n"
                     
                     if type(val) == "table" then
                         Output = Output .. "Loại: TABLE\n"
@@ -128,12 +172,23 @@ task.spawn(function()
         end
     end
     
+    -- HOÀN TẤT
+    BarFill.Size = UDim2.new(1, 0, 1, 0)
+    PercentText.Text = "100%"
+    
     if FoundCount > 0 then
         writefile(FileName, Output)
-        StatusLabel.Text = "✅ XONG! Tìm thấy " .. FoundCount .. " dữ liệu ẩn.\nĐã lưu file: " .. FileName
-        MainFrame.BorderColor3 = Color3.new(0,1,0)
+        
+        Title.Text = "✅ QUÉT THÀNH CÔNG!"
+        StatusLabel.Text = "Đã lưu " .. FoundCount .. " dữ liệu ẩn.\nTên file: " .. FileName
+        StatusLabel.TextColor3 = Color3.new(0, 1, 0)
+        MainFrame.BorderColor3 = Color3.new(0, 1, 0)
+        CloseBtn.BackgroundColor3 = Color3.new(0, 0.6, 0)
+        CloseBtn.Text = "XONG - ĐÓNG TOOL"
     else
-        StatusLabel.Text = "⚠️ VẪN KHÔNG THẤY!\nScript này giấu quá kỹ."
-        MainFrame.BorderColor3 = Color3.new(1,0,0)
+        Title.Text = "⚠️ KHÔNG TÌM THẤY"
+        StatusLabel.Text = "Script này giấu quá kỹ hoặc chưa nạp dữ liệu."
+        StatusLabel.TextColor3 = Color3.new(1, 0, 0)
+        MainFrame.BorderColor3 = Color3.new(1, 0, 0)
     end
 end)
