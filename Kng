@@ -1,90 +1,131 @@
 --[[ 
-    BLOX FRUITS DATA LEECHER - HÚT DỮ LIỆU SẠCH TỪ RAM
-    Chức năng: Tìm kiếm Quest, Mob, Tọa độ đảo từ các script mã hóa
+    DATA LEECHER V2 - ANTI LAG EDITION
+    Chức năng: Hút dữ liệu từ RAM nhưng tối ưu hóa để không làm đơ máy.
 ]]
 
-local FileName = "TEDDY_DECRYPTED_DATA.txt"
-local Output = "=== DỮ LIỆU ĐÃ GIẢI MÃ TỪ BỘ NHỚ ===\n\n"
-local FoundCount = 0
+local HttpService = game:GetService("HttpService")
+local RunService = game:GetService("RunService")
+local FileName = "TEDDY_RAM_DATA.txt"
 
-game:GetService("StarterGui"):SetCore("SendNotification", {
-    Title = "ĐANG HÚT DỮ LIỆU...",
-    Text = "Vui lòng đợi, đang quét RAM...",
-    Duration = 5
-})
+-- GIAO DIỆN TRẠNG THÁI (ĐỂ BIẾT NÓ ĐANG CHẠY)
+local ScreenGui = Instance.new("ScreenGui")
+local Frame = Instance.new("Frame")
+local Status = Instance.new("TextLabel")
+local Bar = Instance.new("Frame")
+local Fill = Instance.new("Frame")
 
--- Hàm làm sạch giá trị để lưu file
+if gethui then ScreenGui.Parent = gethui() else ScreenGui.Parent = game.CoreGui end
+ScreenGui.Name = "LeecherV2"
+
+Frame.Parent = ScreenGui
+Frame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+Frame.Position = UDim2.new(0.3, 0, 0.05, 0)
+Frame.Size = UDim2.new(0.4, 0, 0, 60)
+Frame.BorderSizePixel = 2
+Frame.BorderColor3 = Color3.fromRGB(0, 255, 255)
+
+Status.Parent = Frame
+Status.BackgroundTransparency = 1
+Status.Size = UDim2.new(1, 0, 0.6, 0)
+Status.TextColor3 = Color3.new(1,1,1)
+Status.Text = "Đang khởi động..."
+Status.TextSize = 14
+
+Bar.Parent = Frame
+Bar.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+Bar.Position = UDim2.new(0, 5, 0.7, 0)
+Bar.Size = UDim2.new(1, -10, 0.2, 0)
+Bar.BorderSizePixel = 0
+
+Fill.Parent = Bar
+Fill.BackgroundColor3 = Color3.fromRGB(0, 255, 255)
+Fill.Size = UDim2.new(0, 0, 1, 0)
+Fill.BorderSizePixel = 0
+
+-- HÀM LÀM SẠCH
 local function Clean(v)
-    if typeof(v) == "CFrame" then
-        return string.format("CFrame.new(%.1f, %.1f, %.1f)", v.Position.X, v.Position.Y, v.Position.Z)
-    elseif typeof(v) == "Vector3" then
-        return string.format("Vector3.new(%.1f, %.1f, %.1f)", v.X, v.Y, v.Z)
-    elseif type(v) == "table" then
-        return "{...}"
-    else
-        return tostring(v)
-    end
+    if typeof(v) == "CFrame" then return string.format("Pos(%.0f, %.0f, %.0f)", v.Position.X, v.Position.Y, v.Position.Z)
+    elseif typeof(v) == "Vector3" then return string.format("Vec3(%.0f, %.0f, %.0f)", v.X, v.Y, v.Z)
+    elseif type(v) == "table" then return "{...}"
+    else return tostring(v) end
 end
 
--- Hàm nhận diện dữ liệu Blox Fruits
--- (Script Farm nào cũng phải có những cái này)
+-- HÀM KIỂM TRA MỤC TIÊU (Càng kỹ càng ít rác)
 local function IsFarmData(tbl)
-    if type(tbl) ~= "table" then return false end
-    
-    -- Kiểm tra xem bảng có chứa dữ liệu Quest/Mob không
-    -- Các từ khóa phổ biến mà Dev thường dùng
-    local keys = {"Mon", "Mob", "Name", "Quest", "Level", "Enemy", "CFrame"}
+    -- Chỉ lấy bảng có chứa ít nhất 2 từ khóa quan trọng này
+    local keys = {"Mon", "NameMon", "LevelQuest", "CFrameQuest", "Mob"}
     local matches = 0
-    
-    for k, v in pairs(tbl) do
-        for _, key in pairs(keys) do
-            if string.find(tostring(k), key) or string.find(tostring(v), key) then
-                matches = matches + 1
-            end
-        end
-        -- Nếu bảng chứa CFrame (Tọa độ) -> Khả năng cao là dữ liệu đảo/quái
-        if typeof(v) == "CFrame" or typeof(v) == "Vector3" then
-            matches = matches + 1
-        end
+    for _, key in pairs(keys) do
+        if rawget(tbl, key) then matches = matches + 1 end
     end
-    
-    return matches >= 3 -- Nếu khớp 3 dấu hiệu trở lên thì LẤY
+    return matches >= 2
 end
 
+-- LOGIC CHÍNH
 task.spawn(function()
-    if not getgc then return end
+    if not getgc then 
+        Status.Text = "Lỗi: Executor yếu!"
+        return 
+    end
+
+    -- Thu thập danh sách object (Bước này có thể khựng 1 giây)
+    Status.Text = "Đang lấy danh sách RAM..."
+    RunService.Heartbeat:Wait()
     
-    -- Quét toàn bộ object trong RAM
-    for _, v in pairs(getgc(true)) do
+    local gcObjects = getgc(true)
+    local total = #gcObjects
+    local dataBuffer = {} -- Dùng bảng để lưu (nhanh hơn chuỗi)
+    local foundCount = 0
+    
+    table.insert(dataBuffer, "=== KẾT QUẢ QUÉT RAM (ANTI-LAG) ===\n")
+    
+    -- Quét từng phần nhỏ
+    for i, v in pairs(gcObjects) do
+        -- Cứ 1000 item thì nghỉ 1 nhịp để game thở (QUAN TRỌNG)
+        if i % 1000 == 0 then
+            local p = i / total
+            Fill.Size = UDim2.new(p, 0, 1, 0)
+            Status.Text = string.format("Đang lọc: %d / %d (Tìm thấy: %d)", i, total, foundCount)
+            RunService.Heartbeat:Wait()
+        end
+
         if type(v) == "table" and not rawget(v, "RobloxLocked") then
             if IsFarmData(v) then
-                FoundCount = FoundCount + 1
-                Output = Output .. "--- [DATA #" .. FoundCount .. "] ---\n"
+                foundCount = foundCount + 1
+                local entry = "\n[DATA #" .. foundCount .. "]\n"
                 
+                -- Chỉ lấy dữ liệu chữ/số/tọa độ
                 for k, val in pairs(v) do
-                    pcall(function()
-                         Output = Output .. "   [" .. tostring(k) .. "] = " .. Clean(val) .. "\n"
-                    end)
+                    if type(val) == "string" or type(val) == "number" or typeof(val) == "CFrame" or typeof(val) == "Vector3" then
+                        entry = entry .. "   " .. tostring(k) .. ": " .. Clean(val) .. "\n"
+                    end
                 end
-                Output = Output .. "\n"
+                table.insert(dataBuffer, entry)
             end
         end
     end
     
-    if FoundCount > 0 then
-        writefile(FileName, Output)
-        setclipboard(Output) -- Copy luôn cho tiện
+    Fill.Size = UDim2.new(1, 0, 1, 0)
+    
+    if foundCount > 0 then
+        Status.Text = "Đang lưu file..."
+        RunService.Heartbeat:Wait()
         
-        game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "✅ THÀNH CÔNG!",
-            Text = "Đã hút được " .. FoundCount .. " bảng dữ liệu.\nFile: " .. FileName,
-            Duration = 10
-        })
+        -- Gộp bảng thành văn bản và lưu
+        writefile(FileName, table.concat(dataBuffer))
+        
+        Status.Text = "✅ XONG! Đã lưu file: " .. FileName
+        Status.TextColor3 = Color3.new(0,1,0)
+        
+        local close = Instance.new("TextButton", Frame)
+        close.Size = UDim2.new(1,0,1,0)
+        close.BackgroundTransparency = 1
+        close.Text = ""
+        close.MouseButton1Click:Connect(function() ScreenGui:Destroy() end)
     else
-        game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "❌ KHÔNG TÌM THẤY",
-            Text = "Script giấu dữ liệu quá kỹ hoặc chưa nạp xong.",
-            Duration = 5
-        })
+        Status.Text = "❌ Không tìm thấy dữ liệu nào!"
+        Status.TextColor3 = Color3.new(1,0,0)
+        wait(3)
+        ScreenGui:Destroy()
     end
 end)
