@@ -1,72 +1,75 @@
 --[[ 
-    GUI CONTENTS DUMPER - VÉT SẠCH SCRIPT TRONG MENU
-    Mục tiêu: PlayerGui/noguchihyuga
+    UNIVERSAL DUMPER - VÉT CẠN TOÀN BỘ
+    Chức năng: In tất cả script lạ ra file. Thà giết nhầm hơn bỏ sót!
 ]]
 
-local TargetGUI_Name = "noguchihyuga" -- Tên giao diện chúng ta đã tìm ra
-local TargetGUI_Btn = "noguchi.hyuga Btn" -- Tên nút bật tắt
+-- Tạo thư mục riêng để chứa (nếu Executor hỗ trợ)
+local FolderName = "TEDDY_DUMP_" .. math.random(1000)
+if makefolder then makefolder(FolderName) end
+
+local Count = 0
+local TotalSize = 0
 
 game:GetService("StarterGui"):SetCore("SendNotification", {
-    Title = "ĐANG ĐỘT NHẬP...",
-    Text = "Đang lục soát bên trong giao diện...",
-    Duration = 5
+    Title = "ĐANG VÉT CẠN...",
+    Text = "Sẽ mất khoảng 1-2 phút. Đừng tắt game!",
+    Duration = 10
 })
 
-local function SaveAndCopy(name, content)
-    local fileName = "DUMP_" .. name .. ".txt"
-    writefile(fileName, content)
-    setclipboard(content) -- Copy luôn cái cuối cùng
-    return fileName
+-- Hàm lưu file
+local function Save(scriptObj)
+    if not decompile then return end
+    
+    -- Bỏ qua script hệ thống
+    if string.find(scriptObj.Name, "Roblox") or string.find(scriptObj:GetFullName(), "CoreScripts") then return end
+    
+    local success, code = pcall(function() return decompile(scriptObj) end)
+    
+    if success and #code > 500 then -- Chỉ lấy file > 500 ký tự
+        Count = Count + 1
+        TotalSize = TotalSize + #code
+        
+        -- Tạo tên file an toàn
+        local cleanName = scriptObj.Name:gsub("[^%w]", "_")
+        local path = FolderName .. "/Script_" .. Count .. "_" .. cleanName .. ".txt"
+        
+        -- Nếu không có makefolder thì lưu thẳng vào workspace với tên tiền tố
+        if not makefolder then
+            path = "DUMP_" .. Count .. "_" .. cleanName .. ".txt"
+        end
+        
+        writefile(path, "-- Path: " .. scriptObj:GetFullName() .. "\n\n" .. code)
+    end
 end
 
 task.spawn(function()
-    local PlayerGui = game.Players.LocalPlayer:WaitForChild("PlayerGui")
-    local FoundCount = 0
-    
-    -- Hàm quét bên trong một GUI cụ thể
-    local function ScanGUI(guiName)
-        local target = PlayerGui:FindFirstChild(guiName)
-        if target then
-            print(">> Đã tìm thấy GUI: " .. guiName)
-            
-            -- Quét tất cả con cháu bên trong
-            for _, v in pairs(target:GetDescendants()) do
-                if v:IsA("LocalScript") or v:IsA("ModuleScript") then
-                    print(">> Phát hiện Script: " .. v.Name)
-                    
-                    if decompile then
-                        local s, code = pcall(function() return decompile(v) end)
-                        if s and #code > 0 then
-                            FoundCount = FoundCount + 1
-                            local fname = SaveAndCopy(guiName .. "_" .. v.Name, code)
-                            
-                            game:GetService("StarterGui"):SetCore("SendNotification", {
-                                Title = "BẮT ĐƯỢC 1 EM!",
-                                Text = "Tên: " .. v.Name .. "\nĐã lưu file!",
-                                Duration = 5
-                            })
-                        end
-                    end
-                end
-            end
+    -- 1. Quét CoreGui (Nơi ẩn nấp chính)
+    for _, v in pairs(game:GetService("CoreGui"):GetDescendants()) do
+        if v:IsA("LocalScript") or v:IsA("ModuleScript") then
+            Save(v)
         end
+        if Count % 10 == 0 then wait() end -- Nghỉ để đỡ lag
     end
-
-    -- Quét cả 2 mục tiêu
-    ScanGUI(TargetGUI_Name)
-    ScanGUI(TargetGUI_Btn)
     
-    if FoundCount > 0 then
-        game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "HOÀN TẤT",
-            Text = "Đã dump tổng cộng " .. FoundCount .. " script.\nKiểm tra Workspace ngay!",
-            Duration = 10
-        })
-    else
-        game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "RỖNG TUẾCH?",
-            Text = "Không tìm thấy script nào bên trong GUI này.\nCó thể nó dùng Module bên ngoài.",
-            Duration = 5
-        })
+    -- 2. Quét Player (Nơi ẩn nấp phụ)
+    for _, v in pairs(game.Players.LocalPlayer:GetDescendants()) do
+        if v:IsA("LocalScript") or v:IsA("ModuleScript") then
+            Save(v)
+        end
+        if Count % 10 == 0 then wait() end
     end
+    
+    -- 3. Quét ReplicatedStorage (Nơi chứa Module)
+    for _, v in pairs(game:GetService("ReplicatedStorage"):GetDescendants()) do
+        if v:IsA("ModuleScript") then
+            Save(v)
+        end
+        if Count % 50 == 0 then wait() end
+    end
+    
+    game:GetService("StarterGui"):SetCore("SendNotification", {
+        Title = "HOÀN TẤT!",
+        Text = "Đã lưu " .. Count .. " script.\nVào Workspace kiểm tra ngay!",
+        Duration = 10
+    })
 end)
