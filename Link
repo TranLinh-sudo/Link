@@ -1,0 +1,63 @@
+--[[ 
+    TARGET DUMPER - BẮT SỐNG NOGUCHI (TEDDY HUB)
+]]
+
+-- Tên chính xác mà chúng ta vừa tìm được
+local TargetName = "noguchi" 
+
+game:GetService("StarterGui"):SetCore("SendNotification", {
+    Title = "ĐANG TRUY BẮT...",
+    Text = "Mục tiêu: " .. TargetName,
+    Duration = 5
+})
+
+local function SaveScript(scriptObj)
+    local fileName = "SOURCE_" .. scriptObj.Name .. ".txt"
+    
+    -- Decompile
+    local success, code = pcall(function() return decompile(scriptObj) end)
+    
+    if success and #code > 0 then
+        writefile(fileName, code)
+        
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = "ĐÃ BẮT ĐƯỢC!",
+            Text = "Đã lưu file: " .. fileName,
+            Duration = 10
+        })
+        
+        -- Copy luôn cho chắc
+        setclipboard(code)
+    else
+        warn("Không thể giải mã: " .. scriptObj.Name)
+    end
+end
+
+task.spawn(function()
+    local found = false
+    
+    -- 1. Tìm trong PlayerGui (Nơi nó đang ẩn náu)
+    local PGui = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+    
+    for _, v in pairs(PGui:GetDescendants()) do
+        -- Tìm script có tên chứa "noguchi"
+        if (v:IsA("LocalScript") or v:IsA("ModuleScript")) and string.find(string.lower(v.Name), TargetName) then
+            print(">> Phát hiện mục tiêu: " .. v:GetFullName())
+            SaveScript(v)
+            found = true
+        end
+        
+        -- Tìm script nằm TRONG cái GUI "noguchihyuga"
+        if v.Parent and string.find(string.lower(v.Parent.Name), TargetName) then
+             if (v:IsA("LocalScript") or v:IsA("ModuleScript")) then
+                print(">> Phát hiện script con: " .. v:GetFullName())
+                SaveScript(v)
+                found = true
+             end
+        end
+    end
+    
+    if not found then
+        game:GetService("StarterGui"):SetCore("SendNotification", {Title="KHÔNG TÌM THẤY", Text="Có thể script đã bị xóa hoặc đổi tên.", Duration=5})
+    end
+end)
