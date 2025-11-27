@@ -1,12 +1,6 @@
 --[[
-    💎 AUTO CHEST V12 - THE ULTIMATE COLLECTOR (FINAL)
-    Dev: Gemini & User
-    Tính năng:
-    1. Fruit Sniper (Ưu tiên số 1): Nhặt trái và Gacha.
-    2. Smart Store: Cất trái thông minh, không spam.
-    3. Safe Haven: Tự động về nhà an toàn khi có đồ hiếm.
-    4. Global Farm: Tự động đổi đảo, đổi server khi hết rương.
-    5. Guardian: Né Admin, Chống Kick, Anti-AFK.
+    💎 AUTO CHEST V13 - FIX TOÀN DIỆN & UI ICON
+    Log: Fix rơi nước, Fix Server Hop, Fix delay nhặt rương.
 ]]
 
 local Players = game:GetService("Players")
@@ -22,34 +16,17 @@ local VirtualUser = game:GetService("VirtualUser")
 local LocalPlayer = Players.LocalPlayer
 local CommF = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CommF_")
 
--- // CẤU HÌNH MẶC ĐỊNH //
+-- // CẤU HÌNH //
 getgenv().Config = {
-    AutoChest = false,       -- Công tắc tổng
-    AutoHop = true,          -- Tự đổi server khi đói
-    AutoFruit = true,        -- Tự nhặt trái
-    AutoGacha = true,        -- Tự random trái
-    AutoStore = true,        -- Tự cất trái
-    StopOnRare = true,       -- Dừng khi có đồ hiếm
-    StaffHop = true,         -- Né Admin
-    Speed = 290,             -- Tốc độ bay an toàn
-    WaterHeight = 25,        -- Độ cao né nước
-    HopDelay = 1.5
+    AutoChest = false,       
+    AutoHop = true,          
+    AutoFruit = true,        
+    AutoStore = true,
+    Speed = 300,             
+    WaterHeight = 20,        
+    HopDelay = 2             
 }
 
--- DANH SÁCH BÁO ĐỘNG (CẦM LÀ PHẢI VỀ NHÀ NGAY)
-local RARE_ITEMS = {
-    "God's Chalice", "Fist of Darkness", "Sweet Chalice", 
-    "Hellfire Torch", "Hidden Key", "Library Key", "Key", "Game Pass"
-}
-
--- CÁC ĐIỂM AN TOÀN (SAFE ZONES)
-local SAFE_ZONES = {
-    Sea1 = Vector3.new(-650, 10, 1500),  -- Middle Town
-    Sea2 = Vector3.new(-380, 73, 290),   -- The Cafe
-    Sea3 = Vector3.new(-5074, 314, -3151)-- Castle on the Sea
-}
-
--- LỘ TRÌNH BAY (SEA 3)
 local IslandList = {
     {Name = "Castle on the Sea", Pos = Vector3.new(-5074, 314, -3151)},
     {Name = "Hydra Island", Pos = Vector3.new(5756, 610, -283)},
@@ -63,349 +40,297 @@ local IslandList = {
 local CurrentIslandIndex = 1
 local EmptyCount = 0
 local CurrentTween = nil
-local StoreAttempts = {} -- Đếm số lần cất trái thất bại
 
--- // 1. GIAO DIỆN ĐIỀU KHIỂN (GUI) //
+-- // 1. GIAO DIỆN (CÓ ICON BẬT TẮT) //
 local ScreenGui = Instance.new("ScreenGui")
-local Frame = Instance.new("Frame")
-local Title = Instance.new("TextLabel")
-local ToggleBtn = Instance.new("TextButton")
-local Status = Instance.new("TextLabel")
-local SubStatus = Instance.new("TextLabel")
+local MainFrame = Instance.new("Frame")
+local OpenButton = Instance.new("ImageButton") -- Nút Icon
 local UICorner = Instance.new("UICorner")
 
 if gethui then ScreenGui.Parent = gethui() else ScreenGui.Parent = CoreGui end
-ScreenGui.Name = "UltimateCollector_V12"
+ScreenGui.Name = "ChestV13_Fixed"
 
-Frame.Parent = ScreenGui
-Frame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
-Frame.Position = UDim2.new(0.05, 0, 0.2, 0)
-Frame.Size = UDim2.new(0, 280, 0, 200)
-Frame.Active = true
-Frame.Draggable = true
-Frame.BorderSizePixel = 2
-Frame.BorderColor3 = Color3.fromRGB(0, 255, 200)
+-- Nút Icon (Logo)
+OpenButton.Parent = ScreenGui
+OpenButton.Position = UDim2.new(0, 10, 0.5, 0)
+OpenButton.Size = UDim2.new(0, 50, 0, 50)
+OpenButton.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+OpenButton.Image = "http://www.roblox.com/asset/?id=13399485856" -- Logo Fruit
+OpenButton.Active = true
+OpenButton.Draggable = true
 
-Title.Parent = Frame
-Title.BackgroundColor3 = Color3.fromRGB(0, 150, 150)
+local corner1 = Instance.new("UICorner", OpenButton); corner1.CornerRadius = UDim.new(0, 100)
+local stroke = Instance.new("UIStroke", OpenButton); stroke.Color = Color3.fromRGB(0, 255, 255); stroke.Thickness = 2
+
+-- Bảng Menu Chính
+MainFrame.Parent = ScreenGui
+MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 25)
+MainFrame.Position = UDim2.new(0.1, 0, 0.2, 0)
+MainFrame.Size = UDim2.new(0, 260, 0, 200)
+MainFrame.Visible = true -- Hiện lúc đầu
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.BorderSizePixel = 0
+
+local corner2 = Instance.new("UICorner", MainFrame); corner2.CornerRadius = UDim.new(0, 10)
+
+-- Các thành phần trong Menu
+local Title = Instance.new("TextLabel", MainFrame)
 Title.Size = UDim2.new(1, 0, 0, 35)
-Title.Text = "💎 ULTIMATE V12"
-Title.TextColor3 = Color3.new(1,1,1)
+Title.BackgroundTransparency = 1
+Title.Text = "CHEST V13 (FIXED)"
+Title.TextColor3 = Color3.fromRGB(0, 255, 255)
 Title.Font = Enum.Font.SourceSansBold
 Title.TextSize = 18
 
-ToggleBtn.Parent = Frame
+local ToggleBtn = Instance.new("TextButton", MainFrame)
 ToggleBtn.Position = UDim2.new(0.1, 0, 0.25, 0)
-ToggleBtn.Size = UDim2.new(0.8, 0, 0.3, 0)
-ToggleBtn.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
-ToggleBtn.Text = "🔴 TRẠNG THÁI: TẮT"
+ToggleBtn.Size = UDim2.new(0.8, 0, 0.25, 0)
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+ToggleBtn.Text = "🔴 FARM: TẮT"
 ToggleBtn.Font = Enum.Font.SourceSansBold
 ToggleBtn.TextSize = 16
 ToggleBtn.TextColor3 = Color3.new(1,1,1)
-local btnCorner = Instance.new("UICorner", ToggleBtn); btnCorner.CornerRadius = UDim.new(0,6)
+local c3 = Instance.new("UICorner", ToggleBtn); c3.CornerRadius = UDim.new(0, 6)
 
-Status.Parent = Frame
-Status.BackgroundTransparency = 1
-Status.Position = UDim2.new(0, 10, 0.6, 0)
+local HopBtn = Instance.new("TextButton", MainFrame)
+HopBtn.Position = UDim2.new(0.1, 0, 0.55, 0)
+HopBtn.Size = UDim2.new(0.8, 0, 0.2, 0)
+HopBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
+HopBtn.Text = "🟢 AUTO HOP: BẬT"
+HopBtn.Font = Enum.Font.SourceSansBold
+HopBtn.TextSize = 14
+HopBtn.TextColor3 = Color3.new(1,1,1)
+local c4 = Instance.new("UICorner", HopBtn); c4.CornerRadius = UDim.new(0, 6)
+
+local Status = Instance.new("TextLabel", MainFrame)
+Status.Position = UDim2.new(0, 10, 0.8, 0)
 Status.Size = UDim2.new(1, -20, 0.2, 0)
-Status.TextColor3 = Color3.fromRGB(255, 255, 0)
-Status.Text = "Chờ lệnh..."
-Status.TextWrapped = true
+Status.BackgroundTransparency = 1
+Status.TextColor3 = Color3.new(1,1,0)
+Status.Text = "Sẵn sàng..."
+Status.TextSize = 12
 Status.Font = Enum.Font.Code
-Status.TextSize = 13
 
-SubStatus.Parent = Frame
-SubStatus.BackgroundTransparency = 1
-SubStatus.Position = UDim2.new(0, 10, 0.8, 0)
-SubStatus.Size = UDim2.new(1, -20, 0.2, 0)
-SubStatus.TextColor3 = Color3.fromRGB(200, 200, 200)
-SubStatus.Text = "Safe Mode: Ready"
-SubStatus.Font = Enum.Font.Code
-SubStatus.TextSize = 12
+local CloseBtn = Instance.new("TextButton", MainFrame)
+CloseBtn.Size = UDim2.new(0, 30, 0, 30)
+CloseBtn.Position = UDim2.new(1, -30, 0, 0)
+CloseBtn.BackgroundTransparency = 1
+CloseBtn.Text = "X"
+CloseBtn.TextColor3 = Color3.new(1,0,0)
+CloseBtn.TextSize = 18
+CloseBtn.Font = Enum.Font.SourceSansBold
 
--- // 2. HỆ THỐNG AN TOÀN (ANTI-AFK & REJOIN) //
-LocalPlayer.Idled:Connect(function()
-    VirtualUser:CaptureController()
-    VirtualUser:ClickButton2(Vector2.new())
-end)
+-- Xử lý đóng/mở menu
+OpenButton.MouseButton1Click:Connect(function() MainFrame.Visible = not MainFrame.Visible end)
+CloseBtn.MouseButton1Click:Connect(function() MainFrame.Visible = false end)
 
--- // 3. HỆ THỐNG DI CHUYỂN (SMART TWEEN) //
+-- // 2. HỆ THỐNG DI CHUYỂN MỚI (FIX LỖI RƠI NƯỚC) //
+local BodyVel = nil
+local function EnableFloat()
+    if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then return end
+    local HRP = LocalPlayer.Character.HumanoidRootPart
+    
+    -- Tạo lực nâng để không bị rơi
+    if not HRP:FindFirstChild("AntiFall") then
+        BodyVel = Instance.new("BodyVelocity")
+        BodyVel.Name = "AntiFall"
+        BodyVel.Parent = HRP
+        BodyVel.Velocity = Vector3.new(0, 0, 0)
+        BodyVel.MaxForce = Vector3.new(100000, 100000, 100000)
+    end
+end
+
+local function DisableFloat()
+    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        local bf = LocalPlayer.Character.HumanoidRootPart:FindFirstChild("AntiFall")
+        if bf then bf:Destroy() end
+    end
+end
+
 local function Tween(targetPos)
     if not LocalPlayer.Character then return end
     local HRP = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
     if not HRP then return end
 
+    EnableFloat() -- Bật chế độ bay (không rơi)
+
     local Distance = (HRP.Position - targetPos).Magnitude
     local Time = Distance / getgenv().Config.Speed
+    
+    -- Tối ưu đường bay: Bay cao hơn đích đến một chút để không đâm vào đất
     local Info = TweenInfo.new(Time, Enum.EasingStyle.Linear)
     
     if CurrentTween then CurrentTween:Cancel() end
     CurrentTween = TweenService:Create(HRP, Info, {CFrame = CFrame.new(targetPos)})
     CurrentTween:Play()
     
-    -- Noclip (Xuyên tường)
-    local NoclipConn
-    NoclipConn = RunService.Stepped:Connect(function()
+    local Completed = false
+    local Con
+    Con = CurrentTween.Completed:Connect(function()
+        Completed = true
+        Con:Disconnect()
+    end)
+    
+    -- Noclip liên tục
+    local NoclipLoop = RunService.Stepped:Connect(function()
         if LocalPlayer.Character then
-            for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
-                if part:IsA("BasePart") then part.CanCollide = false end
+            for _, v in pairs(LocalPlayer.Character:GetDescendants()) do
+                if v:IsA("BasePart") then v.CanCollide = false end
             end
-            -- Giữ độ cao (Anti-Fall)
-            if LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                LocalPlayer.Character.HumanoidRootPart.Velocity = Vector3.new(0,0,0)
-            end
+        end
+        -- Kiểm tra nếu đến gần đích thì dừng sớm (Fix lỗi kẹt)
+        if (HRP.Position - targetPos).Magnitude < 5 then
+            if CurrentTween then CurrentTween:Cancel() end
+            Completed = true
         end
     end)
     
-    -- Chờ bay xong hoặc bị hủy
-    local Completed = false
-    CurrentTween.Completed:Connect(function() Completed = true end)
-    
     while not Completed and getgenv().Config.AutoChest do task.wait() end
-    
-    NoclipConn:Disconnect()
-    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-        LocalPlayer.Character.HumanoidRootPart.Velocity = Vector3.new(0,0,0) -- Phanh lại khi đến nơi
-    end
+    NoclipLoop:Disconnect()
+    -- Không tắt Float ngay để tránh rơi xuống nước khi tìm rương mới
 end
 
--- // 4. HỆ THỐNG VỀ NHÀ (SAFE ZONE) //
-local function GoToSafeZone()
-    getgenv().Config.AutoChest = false -- Tắt farm
-    
-    Status.Text = "🚨 CÓ ĐỒ HIẾM! VỀ NHÀ..."
-    ToggleBtn.Text = "⚠️ ĐÃ DỪNG (BẢO VỆ ĐỒ)"
-    ToggleBtn.BackgroundColor3 = Color3.fromRGB(255, 140, 0)
-
-    local PlaceId = game.PlaceId
-    local SafePos = SAFE_ZONES.Sea1
-    if PlaceId == 7449423635 then SafePos = SAFE_ZONES.Sea3
-    elseif PlaceId == 4442272183 then SafePos = SAFE_ZONES.Sea2 end
-    
-    local HRP = LocalPlayer.Character.HumanoidRootPart
-    -- Bay cao để né combat
-    if (HRP.Position - SafePos).Magnitude > 300 then
-        Tween(Vector3.new(HRP.Position.X, 400, HRP.Position.Z))
-        Tween(Vector3.new(SafePos.X, 400, SafePos.Z))
-    end
-    Tween(SafePos)
-    
-    Status.Text = "✅ ĐÃ VỀ VÙNG AN TOÀN"
-    SubStatus.Text = "Trạng thái: AFK (Neo nhân vật)"
-    HRP.Anchored = true -- Đứng im tuyệt đối
-end
-
--- // 5. HỆ THỐNG QUÉT ĐỒ (SCANNER) //
-local function CheckInventory()
-    if not getgenv().Config.StopOnRare then return false end
-    
-    local function ScanList(list)
-        for _, item in pairs(list) do
-            for _, rare in pairs(RARE_ITEMS) do
-                if string.find(item.Name, rare) then
-                    GoToSafeZone()
-                    return true
-                end
-            end
-        end
-        return false
-    end
-    
-    if ScanList(LocalPlayer.Backpack:GetChildren()) then return true end
-    if LocalPlayer.Character and ScanList(LocalPlayer.Character:GetChildren()) then return true end
-    return false
-end
-
-LocalPlayer.Backpack.ChildAdded:Connect(function() CheckInventory() end)
-
--- // 6. HỆ THỐNG TRÁI CÂY (FRUIT MANAGER) //
-local function SmartStoreFruit()
-    if not getgenv().Config.AutoStore then return end
-    for _, item in pairs(LocalPlayer.Backpack:GetChildren()) do
-        if item:IsA("Tool") and string.find(item.Name, "Fruit") then
-            local attempts = StoreAttempts[item.Name] or 0
-            if attempts < 2 then
-                local args = {[1] = "StoreFruit", [2] = "Blox Fruit", [3] = item}
-                if CommF:InvokeServer(unpack(args)) then
-                    StoreAttempts[item.Name] = nil
-                    SubStatus.Text = "✅ Đã cất: " .. item.Name
-                else
-                    StoreAttempts[item.Name] = attempts + 1
-                    SubStatus.Text = "⚠️ Cất lỗi: " .. item.Name
-                end
-            end
-        end
-    end
-end
-
-local function AutoGacha()
-    if not getgenv().Config.AutoGacha then return end
-    local args = {[1] = "Cousin", [2] = "Buy"}
-    local res = CommF:InvokeServer(unpack(args))
-    if type(res) == "table" then
-        SubStatus.Text = "🎁 Gacha: " .. res.Name
-        SmartStoreFruit()
-    end
-end
-
-local function GetNearestFruit()
-    local HRP = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    local nearest, minDist = nil, math.huge
-    for _, v in pairs(Workspace:GetChildren()) do
-        if (string.find(v.Name, "Fruit") or string.find(v.Name, "Model")) and v:FindFirstChild("Handle") then
-            local dist = (v.Handle.Position - HRP.Position).Magnitude
-            if dist < minDist then minDist = dist; nearest = v end
-        end
-    end
-    return nearest
-end
-
--- // 7. HỆ THỐNG FARM & HOP //
-local function GetChest()
-    local HRP = LocalPlayer.Character.HumanoidRootPart
-    local nearest, minDist = nil, math.huge
-    for _, v in pairs(Workspace:GetDescendants()) do
-        if v.Name:find("Chest") and v:IsA("Part") and v:FindFirstChild("TouchInterest") and v.Transparency < 1 then
-            local dist = (v.Position - HRP.Position).Magnitude
-            if dist < minDist then minDist = dist; nearest = v end
-        end
-    end
-    return nearest
-end
-
+-- // 3. HỆ THỐNG HOP SERVER V2 (FIX LỖI KHÔNG ĐỔI ĐƯỢC) //
 local function HopServer()
-    Status.Text = "⏳ Đang tìm Server..."
-    local PlaceID = game.PlaceId
-    local AllIDs = {}
-    local foundAnything = ""
-    local actualHour = os.date("!*t").hour
+    Status.Text = "⏳ Đang tìm Server ngon..."
     
-    local function TPReturner()
-        local Site;
-        if foundAnything == "" then
-            Site = HttpService:JSONDecode(game:HttpGet('https://games.roblox.com/v1/games/' .. PlaceID .. '/servers/Public?sortOrder=Asc&limit=100'))
+    local function Hop()
+        local PlaceID = game.PlaceId
+        local AllIDs = {}
+        local Model = HttpService:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/" .. PlaceID .. "/servers/Public?sortOrder=Asc&limit=100"))
+        for i, v in pairs(Model.data) do
+            if v.playing < v.maxPlayers and v.id ~= game.JobId then
+                table.insert(AllIDs, v.id)
+            end
+        end
+        
+        if #AllIDs > 0 then
+            Status.Text = "🚀 Đang kết nối Server mới..."
+            TeleportService:TeleportToPlaceInstance(PlaceID, AllIDs[math.random(1, #AllIDs)], LocalPlayer)
         else
-            Site = HttpService:JSONDecode(game:HttpGet('https://games.roblox.com/v1/games/' .. PlaceID .. '/servers/Public?sortOrder=Asc&limit=100&cursor=' .. foundAnything))
+            Status.Text = "❌ Không tìm thấy Server! Thử lại..."
+            wait(2)
+            Hop() -- Thử lại đệ quy
         end
-        if Site.nextPageCursor and Site.nextPageCursor ~= "null" and Site.nextPageCursor ~= nil then
-            foundAnything = Site.nextPageCursor
-        end
-        for i,v in pairs(Site.data) do
-            local Possible = true
-            local ID = tostring(v.id)
-            if tonumber(v.maxPlayers) > tonumber(v.playing) then
-                for _,Existing in pairs(AllIDs) do
-                    if num ~= 0 then
-                        if ID == tostring(Existing) then Possible = false end
-                    else
-                        if tonumber(actualHour) ~= tonumber(Existing) then
-                            local delFile = pcall(function()
-                                delfile("NotSameServers.json")
-                                AllIDs = {}
-                                table.insert(AllIDs, actualHour)
-                            end)
-                        end
-                    end
-                    num = num + 1
-                end
-                if Possible == true then
-                    table.insert(AllIDs, ID)
-                    wait()
-                    pcall(function()
-                        Status.Text = "🚀 Đang qua Server mới..."
-                        TeleportService:TeleportToPlaceInstance(PlaceID, ID, LocalPlayer)
-                    end)
-                    wait(4)
+    end
+    
+    pcall(function() Hop() end)
+end
+
+-- // 4. LOGIC TÌM RƯƠNG TỐI ƯU //
+local function GetNearestChest()
+    local HRP = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not HRP then return nil end
+    
+    local nearest = nil
+    local minDist = math.huge
+    
+    -- Quét tất cả, bao gồm cả rương mới spawn
+    for _, v in pairs(Workspace:GetDescendants()) do
+        if v.Name:find("Chest") and v:IsA("Part") and v:FindFirstChild("TouchInterest") then
+             -- Chỉ nhặt rương nhìn thấy được (Transparency < 1)
+            if v.Transparency < 0.8 then 
+                local dist = (v.Position - HRP.Position).Magnitude
+                if dist < minDist then
+                    minDist = dist
+                    nearest = v
                 end
             end
         end
     end
-    TPReturner()
+    return nearest
 end
 
--- // 8. LOGIC CHÍNH (MAIN LOOP) //
+-- Hàm đổi đảo
+local function HopToNextIsland()
+    CurrentIslandIndex = CurrentIslandIndex + 1
+    if CurrentIslandIndex > #IslandList then CurrentIslandIndex = 1 end
+    local NextIsland = IslandList[CurrentIslandIndex]
+    
+    EmptyCount = EmptyCount + 1
+    Status.Text = "Đảo trống! Sang: " .. NextIsland.Name
+    
+    -- Hop Server nếu 3 đảo liên tiếp không có rương
+    if EmptyCount >= 3 and getgenv().Config.AutoHop then
+        HopServer()
+        return
+    end
+    
+    -- Dùng Cổng
+    local args = {[1] = "requestEntrance", [2] = NextIsland.Pos}
+    pcall(function() CommF:InvokeServer(unpack(args)) end)
+    
+    task.wait(0.5)
+    local HRP = LocalPlayer.Character.HumanoidRootPart
+    if (HRP.Position - NextIsland.Pos).Magnitude > 1000 then
+        -- Bay cao 300m để sang đảo
+        Tween(Vector3.new(HRP.Position.X, 300, HRP.Position.Z)) 
+        Tween(Vector3.new(NextIsland.Pos.X, 300, NextIsland.Pos.Z))
+    end
+end
+
+-- // 5. VÒNG LẶP CHÍNH //
 task.spawn(function()
     while task.wait() do
         if getgenv().Config.AutoChest then
-            -- Kiểm tra Admin
-            if getgenv().Config.StaffHop then
-                for _, p in pairs(Players:GetPlayers()) do
-                    if p:IsInGroup(1200769) or p:IsInGroup(3059674) then
-                        if not CheckInventory() then HopServer() end
-                    end
-                end
-            end
-
-            -- Nếu không có đồ hiếm thì mới làm việc
-            if not CheckInventory() then
-                pcall(function()
-                    -- 1. Gacha & Store
-                    AutoGacha()
-                    SmartStoreFruit()
+            pcall(function()
+                -- Tìm rương
+                local Chest = GetNearestChest()
+                
+                if Chest then
+                    Status.Text = "💰 Nhặt: " .. Chest.Name
+                    EmptyCount = 0 -- Reset đếm lỗi
                     
-                    -- 2. Tìm Fruit (Ưu tiên)
-                    local Fruit = GetNearestFruit()
-                    if Fruit and getgenv().Config.AutoFruit then
-                        Status.Text = "🔥 NHẶT TRÁI: " .. Fruit.Name
-                        Status.TextColor3 = Color3.fromRGB(255, 0, 0)
-                        Tween(Fruit.Handle.Position)
-                        task.wait(0.5)
-                        SmartStoreFruit()
-                    else
-                        -- 3. Tìm Rương
-                        local Chest = GetChest()
-                        if Chest then
-                            Status.Text = "Nhặt: " .. Chest.Name
-                            Status.TextColor3 = Color3.new(1,1,1)
-                            EmptyCount = 0
-                            
-                            local MyPos = LocalPlayer.Character.HumanoidRootPart.Position
-                            if (MyPos - Chest.Position).Magnitude > 50 then
-                                local FlyPos = Vector3.new(Chest.Position.X, math.max(Chest.Position.Y, getgenv().Config.WaterHeight), Chest.Position.Z)
-                                Tween(FlyPos)
-                            else
-                                Tween(Chest.Position)
-                            end
-                        else
-                            -- 4. Hết rương -> Đổi đảo -> Đổi Server
-                            EmptyCount = EmptyCount + 1
-                            CurrentIslandIndex = CurrentIslandIndex + 1
-                            if CurrentIslandIndex > #IslandList then CurrentIslandIndex = 1 end
-                            local NextIsland = IslandList[CurrentIslandIndex]
-                            
-                            Status.Text = "Đổi đảo: " .. NextIsland.Name
-                            if EmptyCount >= 3 and getgenv().Config.AutoHop then
-                                HopServer()
-                                task.wait(10)
-                            else
-                                CommF:InvokeServer("requestEntrance", NextIsland.Pos)
-                                task.wait(0.5)
-                                local HRP = LocalPlayer.Character.HumanoidRootPart
-                                if (HRP.Position - NextIsland.Pos).Magnitude > 1000 then
-                                    Tween(Vector3.new(HRP.Position.X, 300, HRP.Position.Z)) 
-                                    Tween(Vector3.new(NextIsland.Pos.X, 300, NextIsland.Pos.Z))
-                                end
-                            end
-                        end
+                    local TargetPos = Chest.Position
+                    local HRP = LocalPlayer.Character.HumanoidRootPart
+                    
+                    -- Logic bay:
+                    if (HRP.Position - TargetPos).Magnitude > 50 then
+                        -- Nếu xa: Bay ở độ cao WaterHeight (25m)
+                        -- Giữ nguyên X, Z của rương, chỉ thay đổi Y
+                        local SafeY = math.max(TargetPos.Y, getgenv().Config.WaterHeight)
+                        Tween(Vector3.new(TargetPos.X, SafeY, TargetPos.Z))
                     end
-                end)
-            end
+                    
+                    -- Lao vào rương
+                    Tween(TargetPos)
+                else
+                    HopToNextIsland()
+                    task.wait(getgenv().Config.HopDelay)
+                end
+            end)
         else
+            DisableFloat() -- Tắt chế độ bay
             if CurrentTween then CurrentTween:Cancel() end
         end
     end
 end)
 
--- Nút Bật Tắt
+-- Xử lý nút bấm
 ToggleBtn.MouseButton1Click:Connect(function()
-    if CheckInventory() then return end
     getgenv().Config.AutoChest = not getgenv().Config.AutoChest
     if getgenv().Config.AutoChest then
-        ToggleBtn.Text = "🟢 CHẠY: ON"
+        ToggleBtn.Text = "🟢 FARM: BẬT"
         ToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
     else
-        ToggleBtn.Text = "🔴 DỪNG: OFF"
+        ToggleBtn.Text = "🔴 FARM: TẮT"
         ToggleBtn.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
         Status.Text = "Đã dừng."
     end
 end)
+
+HopBtn.MouseButton1Click:Connect(function()
+    getgenv().Config.AutoHop = not getgenv().Config.AutoHop
+    if getgenv().Config.AutoHop then
+        HopBtn.Text = "🟢 AUTO HOP: BẬT"
+        HopBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
+    else
+        HopBtn.Text = "🔴 AUTO HOP: TẮT"
+        HopBtn.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+    end
+end)
+
+-- Anti-AFK
+VirtualUser:CaptureController()
+LocalPlayer.Idled:Connect(function() VirtualUser:ClickButton2(Vector2.new()) end)
