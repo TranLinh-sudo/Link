@@ -1,318 +1,224 @@
 --[[
-    💎 AUTO CHEST V20 - POSEIDON EDITION
+    💎 AUTO CHEST V21 - GUARDIAN EDITION
     Chức năng:
-    - Biến nước thành sàn cứng vô hình (Đi bộ trên biển).
-    - Farm Rương/Trái tự động.
-    - Gọn nhẹ, không có rác trên màn hình.
+    - Farm Rương/Trái (Ưu tiên Trái).
+    - Giữ đồ hiếm về Safe Zone.
+    - KHÔNG ĐỔI SERVER (No Hop).
+    - Anti-Kick (Treo máy 24/7).
+    - Anti-Ban (Gặp Admin -> Tự thoát game để bảo toàn acc).
 ]]
-
-getgenv().ChestV20_Running = true
-getgenv().Config = {
-    AutoChest = false,
-    AutoHop = true,
-    AutoFruit = true,
-    Speed = 300,
-    HopDelay = 2
-}
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
-local CoreGui = game:GetService("CoreGui")
-local TeleportService = game:GetService("TeleportService")
-local HttpService = game:GetService("HttpService")
 local VirtualUser = game:GetService("VirtualUser")
+local CoreGui = game:GetService("CoreGui")
 
 local LocalPlayer = Players.LocalPlayer
+local CommF = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CommF_")
+
+-- // CẤU HÌNH //
+getgenv().Settings = {
+    Enable = true,           
+    TweenSpeed = 300,        
+    MaxStoreAttempts = 5,
+    StaffCheck = true,       -- Bật chế độ soi Admin
+    AutoRejoin = true        -- Tự động vào lại nếu bị rớt mạng
+}
+
+-- Danh sách đồ hiếm
+local RARE_ITEMS = {
+    "God's Chalice", "Fist of Darkness", "Game Pass", 
+    "Hidden Key", "Library Key", "Key" -- Các loại chìa khóa
+}
+
+-- Vùng an toàn
+local SAFE_ZONES = {
+    Sea1 = CFrame.new(-650, 10, 1500),
+    Sea2 = CFrame.new(-380, 73, 290),
+    Sea3 = CFrame.new(-5074, 314, -3151)
+}
+
+local StoreCount = {}
 local CurrentTween = nil
 
--- // 1. HỆ THỐNG "MẶT BIỂN BÊ TÔNG" (INVISIBLE SOLID WATER) //
--- Thay vì tạo part nhỏ, ta tìm map nước gốc và làm nó cứng lại
-local function EnableWaterWalk()
-    pcall(function()
-        -- Tìm các part nước trong Map
-        for _, v in pairs(Workspace.Map:GetChildren()) do
-            if v.Name:find("Water") or v.Name:find("Ocean") then
-                if v:IsA("BasePart") then
-                    v.CanCollide = true -- Làm cứng lại
-                    v.Size = Vector3.new(100000, 5, 100000) -- Mở rộng vô tận
-                    v.Transparency = 1 -- Tàng hình hoàn toàn (Không thấy tấm gì cả)
-                end
-            end
+-- // 1. HỆ THỐNG ANTI-KICK (CHỐNG AFK) //
+-- Tự động click chuột mỗi khi game định tính là AFK
+LocalPlayer.Idled:Connect(function()
+    VirtualUser:CaptureController()
+    VirtualUser:ClickButton2(Vector2.new())
+    print(">> [ANTI-AFK] Đã kích hoạt chống văng!")
+end)
+
+-- // 2. HỆ THỐNG ANTI-BAN (NHẬN DIỆN ADMIN) //
+local function CheckStaff()
+    if not getgenv().Settings.StaffCheck then return end
+    for _, p in pairs(Players:GetPlayers()) do
+        -- ID Group của Admin/Staff Blox Fruits
+        if p:IsInGroup(1200769) or p:IsInGroup(3059674) then
+            -- Vì Sếp yêu cầu "Bỏ Hop Server", nên gặp Admin là TỰ THOÁT luôn cho an toàn
+            LocalPlayer:Kick(">> [ANTI-BAN] Phát hiện Admin! Đã thoát để bảo vệ acc.")
         end
-    end)
+    end
 end
 
--- Hàm trả lại nước bình thường khi tắt script
-local function DisableWaterWalk()
-    pcall(function()
-        for _, v in pairs(Workspace.Map:GetChildren()) do
-            if v.Name:find("Water") or v.Name:find("Ocean") then
-                if v:IsA("BasePart") then
-                    v.CanCollide = false -- Trở lại lỏng
-                    v.Transparency = 0 -- Hiện lại màu nước (nếu game có set)
-                end
-            end
-        end
-    end)
-end
+-- Quét liên tục mỗi khi có người mới vào
+Players.PlayerAdded:Connect(CheckStaff)
 
--- Chạy liên tục để đảm bảo nước luôn cứng (game hay reset map)
-task.spawn(function()
-    while getgenv().ChestV20_Running and task.wait(2) do
-        EnableWaterWalk()
+-- // 3. HỆ THỐNG AUTO-REJOIN (TỰ VÀO LẠI NẾU MẠNG LAG) //
+spawn(function()
+    while wait() do
+        if getgenv().Settings.AutoRejoin then
+            pcall(function()
+                local errorPopup = CoreGui.RobloxPromptGui.promptOverlay:FindFirstChild("ErrorPrompt")
+                if errorPopup and errorPopup.MessageArea.ErrorFrame.ButtonArea.ButtonLayout.Visible then
+                    -- Nếu thấy bảng báo lỗi (mất kết nối) -> Rejoin
+                    game:GetService("TeleportService"):Teleport(game.PlaceId)
+                end
+            end)
+        end
     end
 end)
 
--- // 2. HỆ THỐNG UNLOAD //
-local function UnloadScript()
-    getgenv().ChestV20_Running = false
-    getgenv().Config.AutoChest = false
-    
-    if CurrentTween then CurrentTween:Cancel() end
-    
-    -- Trả lại nước cũ
-    DisableWaterWalk()
-    
-    if gethui then
-        if gethui():FindFirstChild("ChestV20_GUI") then gethui().ChestV20_GUI:Destroy() end
-    else
-        if CoreGui:FindFirstChild("ChestV20_GUI") then CoreGui.ChestV20_GUI:Destroy() end
+-- // 4. HỆ THỐNG VẬT LÝ (ĐI TRÊN NƯỚC) //
+task.spawn(function()
+    while task.wait(1) do
+        pcall(function()
+            local Water = Workspace.Map:FindFirstChild("WaterBase-Plane")
+            if Water then
+                Water.Size = Vector3.new(100000, 5, 100000)
+                Water.CanCollide = true
+                Water.Transparency = 0.5
+            end
+        end)
     end
-    
-    -- Trả lại vật lý
+end)
+
+RunService.Stepped:Connect(function()
     if LocalPlayer.Character then
         for _, v in pairs(LocalPlayer.Character:GetDescendants()) do
-            if v:IsA("BasePart") then v.CanCollide = true end
+            if v:IsA("BasePart") then v.CanCollide = false end
         end
         if LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
             LocalPlayer.Character.HumanoidRootPart.Velocity = Vector3.new(0,0,0)
-            LocalPlayer.Character.HumanoidRootPart.Anchored = false
         end
     end
-end
+end)
 
-UnloadScript() -- Xóa bản cũ nếu có
-getgenv().ChestV20_Running = true
-
--- // 3. GIAO DIỆN (GUI) //
-local ScreenGui = Instance.new("ScreenGui")
-local MainFrame = Instance.new("Frame")
-local Title = Instance.new("TextLabel")
-local ToggleBtn = Instance.new("TextButton")
-local HopBtn = Instance.new("TextButton")
-local Status = Instance.new("TextLabel")
-local CloseBtn = Instance.new("TextButton")
-local OpenBtn = Instance.new("ImageButton")
-local UICorner = Instance.new("UICorner")
-
-if gethui then ScreenGui.Parent = gethui() else ScreenGui.Parent = CoreGui end
-ScreenGui.Name = "ChestV20_GUI"
-
--- Icon Mở
-OpenBtn.Parent = ScreenGui
-OpenBtn.Position = UDim2.new(0, 20, 0.4, 0)
-OpenBtn.Size = UDim2.new(0, 50, 0, 50)
-OpenBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-OpenBtn.Image = "rbxassetid://9267242786"
-OpenBtn.Active = true
-OpenBtn.Draggable = true
-Instance.new("UICorner", OpenBtn).CornerRadius = UDim.new(1, 0)
-Instance.new("UIStroke", OpenBtn).Color = Color3.fromRGB(0, 255, 255)
-
--- Menu
-MainFrame.Parent = ScreenGui
-MainFrame.BackgroundColor3 = Color3.fromRGB(10, 20, 30)
-MainFrame.Position = UDim2.new(0.2, 0, 0.2, 0)
-MainFrame.Size = UDim2.new(0, 250, 0, 180)
-MainFrame.Visible = false
-MainFrame.Active = true
-MainFrame.Draggable = true
-Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 10)
-Instance.new("UIStroke", MainFrame).Color = Color3.fromRGB(0, 150, 255)
-
-Title.Parent = MainFrame
-Title.BackgroundColor3 = Color3.fromRGB(0, 100, 200)
-Title.Size = UDim2.new(1, 0, 0, 30)
-Title.Text = "  POSEIDON V20 (SOLID WATER)"
-Title.TextColor3 = Color3.new(1,1,1)
-Title.Font = Enum.Font.SourceSansBold
-Title.TextSize = 14
-Title.TextXAlignment = Enum.TextXAlignment.Left
-Instance.new("UICorner", Title).CornerRadius = UDim.new(0, 8)
-
-CloseBtn.Parent = MainFrame
-CloseBtn.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
-CloseBtn.Position = UDim2.new(1, -30, 0, 0)
-CloseBtn.Size = UDim2.new(0, 30, 0, 30)
-CloseBtn.Text = "X"
-CloseBtn.TextColor3 = Color3.new(1,1,1)
-CloseBtn.Font = Enum.Font.SourceSansBold
-Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 8)
-
-ToggleBtn.Parent = MainFrame
-ToggleBtn.Position = UDim2.new(0.1, 0, 0.25, 0)
-ToggleBtn.Size = UDim2.new(0.8, 0, 0.25, 0)
-ToggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-ToggleBtn.Text = "🔴 FARM: TẮT"
-ToggleBtn.Font = Enum.Font.SourceSansBold
-ToggleBtn.TextSize = 16
-ToggleBtn.TextColor3 = Color3.new(1,1,1)
-Instance.new("UICorner", ToggleBtn).CornerRadius = UDim.new(0, 6)
-
-HopBtn.Parent = MainFrame
-HopBtn.Position = UDim2.new(0.1, 0, 0.55, 0)
-HopBtn.Size = UDim2.new(0.8, 0, 0.2, 0)
-HopBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
-HopBtn.Text = "🟢 AUTO HOP: BẬT"
-HopBtn.Font = Enum.Font.SourceSansBold
-HopBtn.TextSize = 14
-HopBtn.TextColor3 = Color3.new(1,1,1)
-Instance.new("UICorner", HopBtn).CornerRadius = UDim.new(0, 6)
-
-Status.Parent = MainFrame
-Status.BackgroundTransparency = 1
-Status.Position = UDim2.new(0, 10, 0.8, 0)
-Status.Size = UDim2.new(1, -20, 0.2, 0)
-Status.TextColor3 = Color3.new(1,1,0)
-Status.Text = "Mặt nước đã cứng..."
-Status.TextSize = 12
-Status.Font = Enum.Font.Code
-
-OpenBtn.MouseButton1Click:Connect(function() MainFrame.Visible = not MainFrame.Visible end)
-CloseBtn.MouseButton1Click:Connect(function() UnloadScript() end)
-
--- // 4. LOGIC CHÍNH //
-local function HopServer()
-    Status.Text = "⏳ Tìm Server mới..."
-    local PlaceID = game.PlaceId
-    local AllIDs = {}
-    local function TPReturner()
-        local Site;
-        if foundAnything == "" then
-            Site = HttpService:JSONDecode(game:HttpGet('https://games.roblox.com/v1/games/' .. PlaceID .. '/servers/Public?sortOrder=Asc&limit=100'))
-        else
-            Site = HttpService:JSONDecode(game:HttpGet('https://games.roblox.com/v1/games/' .. PlaceID .. '/servers/Public?sortOrder=Asc&limit=100&cursor=' .. foundAnything))
-        end
-        if Site.nextPageCursor and Site.nextPageCursor ~= "null" and Site.nextPageCursor ~= nil then
-            foundAnything = Site.nextPageCursor
-        end
-        for i,v in pairs(Site.data) do
-            if v.playing < v.maxPlayers and v.id ~= game.JobId then
-                table.insert(AllIDs, v.id)
-            end
-        end
-    end
-    pcall(function()
-        TPReturner()
-        if #AllIDs > 0 then
-            TeleportService:TeleportToPlaceInstance(PlaceID, AllIDs[math.random(1, #AllIDs)], LocalPlayer)
-        end
-    end)
-end
-
+-- // 5. HỆ THỐNG DI CHUYỂN //
 local function Tween(targetCFrame)
-    if not LocalPlayer.Character then return end
-    local HRP = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if not HRP then return end
+    if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then return end
+    local HRP = LocalPlayer.Character.HumanoidRootPart
+    
+    -- Check Admin trước khi bay
+    CheckStaff()
 
-    local Distance = (HRP.Position - targetCFrame.Position).Magnitude
-    local Time = Distance / getgenv().Config.Speed
+    local Dist = (HRP.Position - targetCFrame.Position).Magnitude
+    
+    -- Logic Portal Sea 3
+    if game.PlaceId == 7449423635 and Dist > 3000 then
+        pcall(function() CommF:InvokeServer("requestEntrance", Vector3.new(-5074, 314, -3151)) end)
+        task.wait(0.5)
+    end
+    
+    Dist = (HRP.Position - targetCFrame.Position).Magnitude
+    local Time = Dist / getgenv().Settings.TweenSpeed
     local Info = TweenInfo.new(Time, Enum.EasingStyle.Linear)
     
     if CurrentTween then CurrentTween:Cancel() end
     CurrentTween = TweenService:Create(HRP, Info, {CFrame = targetCFrame})
     CurrentTween:Play()
+    CurrentTween.Completed:Wait()
     
-    local NoclipLoop = RunService.Stepped:Connect(function()
-        if not getgenv().ChestV20_Running then return end
-        if LocalPlayer.Character then
-            for _, v in pairs(LocalPlayer.Character:GetDescendants()) do
-                if v:IsA("BasePart") then v.CanCollide = false end
+    HRP.Velocity = Vector3.new(0,0,0)
+end
+
+-- // 6. LOGIC CHÍNH //
+local function GetFruit()
+    for _, v in pairs(Workspace:GetChildren()) do
+        if (string.find(v.Name, "Fruit") or v:IsA("Tool")) and v:FindFirstChild("Handle") then
+            return v
+        end
+    end
+    return nil
+end
+
+local function GetChest()
+    local list = {}
+    for _, v in pairs(Workspace:GetDescendants()) do
+        if v.Name:find("Chest") and v:IsA("Part") and v:FindFirstChild("TouchInterest") and v.Transparency < 0.8 then
+            table.insert(list, v)
+        end
+    end
+    local nearest, minDst = nil, math.huge
+    local myPos = LocalPlayer.Character.HumanoidRootPart.Position
+    for _, chest in pairs(list) do
+        local dst = (chest.Position - myPos).Magnitude
+        if dst < minDst then minDst = dst; nearest = chest end
+    end
+    return nearest
+end
+
+local function HasRareItem()
+    local function Scan(loc)
+        for _, item in pairs(loc:GetChildren()) do
+            for _, rare in pairs(RARE_ITEMS) do
+                if string.find(item.Name, rare) then return true end
             end
         end
-    end)
-
-    CurrentTween.Completed:Wait()
-    NoclipLoop:Disconnect()
+        return false
+    end
+    if Scan(LocalPlayer.Backpack) or Scan(LocalPlayer.Character) then return true end
+    return false
 end
 
 task.spawn(function()
-    while task.wait() and getgenv().ChestV20_Running do
-        if getgenv().Config.AutoChest then
+    while task.wait() do
+        if getgenv().Settings.Enable then
             pcall(function()
-                -- A. TÌM TRÁI CÂY
-                local Fruit = nil
-                for _, v in pairs(Workspace:GetChildren()) do
-                    if (string.find(v.Name, "Fruit") or string.find(v.Name, "Model")) and v:FindFirstChild("Handle") then
-                        Fruit = v
-                        break
-                    end
-                end
-
-                if Fruit and getgenv().Config.AutoFruit then
-                    Status.Text = "🔥 NHẶT: " .. Fruit.Name
+                -- A. FRUIT (ƯU TIÊN SỐ 1)
+                local Fruit = GetFruit()
+                if Fruit then
                     Tween(Fruit.Handle.CFrame)
-                    -- Store Fruit
-                    game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer("StoreFruit", "Blox Fruit", Fruit)
-                else
-                    -- B. TÌM RƯƠNG
-                    local Chest = nil
-                    local MinDist = math.huge
-                    local HRP = LocalPlayer.Character.HumanoidRootPart
                     
-                    for _, v in pairs(Workspace:GetDescendants()) do
-                        if v.Name:find("Chest") and v:IsA("Part") and v:FindFirstChild("TouchInterest") and v.Transparency < 0.8 then
-                            local d = (v.Position - HRP.Position).Magnitude
-                            if d < MinDist then
-                                MinDist = d
-                                Chest = v
-                            end
-                        end
+                    local fname = Fruit.Name
+                    local count = StoreCount[fname] or 0
+                    if count < getgenv().Settings.MaxStoreAttempts then
+                        local success = CommF:InvokeServer("StoreFruit", "Blox Fruit", Fruit)
+                        if not success then StoreCount[fname] = count + 1 end
                     end
-
-                    if Chest then
-                        Status.Text = "💰 Nhặt: " .. Chest.Name
-                        Tween(Chest.CFrame)
-                    else
-                        Status.Text = "Hết rương! Hop..."
-                        if getgenv().Config.AutoHop then
-                            HopServer()
-                            task.wait(5)
-                        end
-                    end
+                    return
+                end
+                
+                -- B. RARE ITEM (ƯU TIÊN SỐ 2)
+                if HasRareItem() then
+                    local SafeSpot = SAFE_ZONES.Sea1
+                    if game.PlaceId == 4442272183 then SafeSpot = SAFE_ZONES.Sea2 end
+                    if game.PlaceId == 7449423635 then SafeSpot = SAFE_ZONES.Sea3 end
+                    
+                    Tween(SafeSpot)
+                    return
+                end
+                
+                -- C. CHEST (ƯU TIÊN SỐ 3)
+                local Chest = GetChest()
+                if Chest then
+                    -- Bay thẳng vào tâm rương (V1 Style)
+                    Tween(Chest.CFrame)
+                else
+                    -- Không Hop Server -> Đứng chờ
+                    task.wait(1)
                 end
             end)
-        else
-            if CurrentTween then CurrentTween:Cancel() end
-            Status.Text = "Đã dừng."
         end
     end
 end)
 
--- Xử lý nút
-ToggleBtn.MouseButton1Click:Connect(function()
-    getgenv().Config.AutoChest = not getgenv().Config.AutoChest
-    if getgenv().Config.AutoChest then
-        ToggleBtn.Text = "🟢 CHẠY: ON"
-        ToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
-    else
-        ToggleBtn.Text = "🔴 DỪNG: OFF"
-        ToggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-    end
-end)
-
-HopBtn.MouseButton1Click:Connect(function()
-    getgenv().Config.AutoHop = not getgenv().Config.AutoHop
-    if getgenv().Config.AutoHop then
-        HopBtn.Text = "🟢 HOP: BẬT"
-        HopBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
-    else
-        HopBtn.Text = "🔴 HOP: TẮT"
-        HopBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-    end
-end)
-
-VirtualUser:CaptureController()
-LocalPlayer.Idled:Connect(function() VirtualUser:ClickButton2(Vector2.new()) end)
+-- Thông báo
+game.StarterGui:SetCore("SendNotification", {
+    Title = "CHEST V21 - FULL SAFE",
+    Text = "Anti-AFK: ON | Anti-Ban: ON",
+    Duration = 5
+})
