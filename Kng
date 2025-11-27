@@ -1,148 +1,226 @@
 --[[
-    💎 AUTO CHEST V2 - GUI CONTROL
-    Chức năng: Có nút Bật/Tắt trên màn hình, tìm rương gần nhất, bay mượt.
+    💎 AUTO CHEST V3 - GLOBAL FARM (SEA 3 OPTIMIZED)
+    Chức năng: Bay mượt, Xuyên tường, Tự đổi đảo, Giữ độ cao mặt nước
 ]]
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
-local CoreGui = game:GetService("CoreGui")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
+local CoreGui = game:GetService("CoreGui")
 
 local LocalPlayer = Players.LocalPlayer
-local CurrentTween = nil -- Biến để lưu tween đang chạy (để hủy khi tắt)
+local CommF = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CommF_")
 
+-- // CẤU HÌNH //
 getgenv().Config = {
-    AutoChest = false,
-    TweenSpeed = 300
+    AutoChest = false,       -- Bật/Tắt
+    Speed = 300,             -- Tốc độ bay (300 là an toàn)
+    WaterHeight = 20,        -- Độ cao cách mặt nước (Y)
+    HopDelay = 2             -- Thời gian đợi load đảo mới
 }
 
--- // 1. TẠO GIAO DIỆN (GUI) //
+-- Danh sách các điểm Dịch chuyển (Sea 3 - World 3)
+-- Script sẽ bay qua các điểm này để load rương mới
+local IslandList = {
+    {Name = "Castle on the Sea", Pos = Vector3.new(-5074, 314, -3151)},
+    {Name = "Hydra Island", Pos = Vector3.new(5756, 610, -283)},
+    {Name = "Floating Turtle", Pos = Vector3.new(-12463, 375, -7552)},
+    {Name = "Haunted Castle", Pos = Vector3.new(-9548, 142, 5536)},
+    {Name = "Port Town", Pos = Vector3.new(-265, 9, 5335)},
+    {Name = "Great Tree", Pos = Vector3.new(2356, 30, -6940)},
+    {Name = "Candy Island", Pos = Vector3.new(-1111, 15, -14344)}
+}
+
+local CurrentIslandIndex = 1
+local CurrentTween = nil
+
+-- // 1. GIAO DIỆN ĐIỀU KHIỂN //
 local ScreenGui = Instance.new("ScreenGui")
 local Frame = Instance.new("Frame")
 local Title = Instance.new("TextLabel")
 local ToggleBtn = Instance.new("TextButton")
-local UICorner = Instance.new("UICorner")
+local Status = Instance.new("TextLabel")
 
--- Tìm nơi gắn GUI an toàn
 if gethui then ScreenGui.Parent = gethui() else ScreenGui.Parent = CoreGui end
-ScreenGui.Name = "AutoChestGUI"
+ScreenGui.Name = "ChestV3"
 
--- Khung chính
 Frame.Parent = ScreenGui
-Frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-Frame.Position = UDim2.new(0.1, 0, 0.3, 0)
-Frame.Size = UDim2.new(0, 200, 0, 120)
+Frame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+Frame.Position = UDim2.new(0.1, 0, 0.2, 0)
+Frame.Size = UDim2.new(0, 250, 0, 160)
 Frame.Active = true
-Frame.Draggable = true -- Cho phép kéo thả
+Frame.Draggable = true
+Frame.BorderSizePixel = 2
+Frame.BorderColor3 = Color3.fromRGB(0, 255, 255)
 
--- Tiêu đề
 Title.Parent = Frame
-Title.BackgroundColor3 = Color3.fromRGB(255, 170, 0)
-Title.Size = UDim2.new(1, 0, 0, 30)
-Title.Font = Enum.Font.SourceSansBold
-Title.Text = "AUTO CHEST"
+Title.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+Title.Size = UDim2.new(1, 0, 0, 35)
+Title.Text = "AUTO CHEST V3 (GLOBAL)"
 Title.TextColor3 = Color3.new(1,1,1)
-Title.TextSize = 18
+Title.Font = Enum.Font.SourceSansBold
+Title.TextSize = 16
 
--- Nút Bật/Tắt
 ToggleBtn.Parent = Frame
-ToggleBtn.BackgroundColor3 = Color3.fromRGB(255, 50, 50) -- Màu đỏ (Tắt)
-ToggleBtn.Position = UDim2.new(0.1, 0, 0.4, 0)
-ToggleBtn.Size = UDim2.new(0.8, 0, 0.4, 0)
+ToggleBtn.Position = UDim2.new(0.1, 0, 0.3, 0)
+ToggleBtn.Size = UDim2.new(0.8, 0, 0.3, 0)
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+ToggleBtn.Text = "🔴 TẮT (OFF)"
 ToggleBtn.Font = Enum.Font.SourceSansBold
-ToggleBtn.Text = "TRẠNG THÁI: TẮT 🔴"
+ToggleBtn.TextSize = 18
 ToggleBtn.TextColor3 = Color3.new(1,1,1)
-ToggleBtn.TextSize = 16
 
-local btnCorner = Instance.new("UICorner", ToggleBtn)
-btnCorner.CornerRadius = UDim.new(0, 8)
+Status.Parent = Frame
+Status.BackgroundTransparency = 1
+Status.Position = UDim2.new(0, 10, 0.65, 0)
+Status.Size = UDim2.new(1, -20, 0.3, 0)
+Status.TextColor3 = Color3.new(1,1,0)
+Status.Text = "Trạng thái: Đang nghỉ"
+Status.TextWrapped = true
+Status.Font = Enum.Font.Code
+Status.TextSize = 14
 
--- // 2. LOGIC XỬ LÝ NÚT BẤM //
-ToggleBtn.MouseButton1Click:Connect(function()
-    getgenv().Config.AutoChest = not getgenv().Config.AutoChest
-    
-    if getgenv().Config.AutoChest then
-        ToggleBtn.Text = "TRẠNG THÁI: BẬT 🟢"
-        ToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100) -- Xanh lá
-    else
-        ToggleBtn.Text = "TRẠNG THÁI: TẮT 🔴"
-        ToggleBtn.BackgroundColor3 = Color3.fromRGB(255, 50, 50) -- Đỏ
+-- // 2. HÀM NOCLIP (XUYÊN TƯỜNG) //
+RunService.Stepped:Connect(function()
+    if getgenv().Config.AutoChest and LocalPlayer.Character then
+        for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
+            if part:IsA("BasePart") then part.CanCollide = false end
+        end
         
-        -- Dừng ngay lập tức khi tắt
-        if CurrentTween then CurrentTween:Cancel() end
+        -- Giữ nhân vật không bị rơi
+        if LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            LocalPlayer.Character.HumanoidRootPart.Velocity = Vector3.new(0,0,0)
+        end
     end
 end)
 
 -- // 3. HÀM BAY (TWEEN) //
-local function Tween(targetCFrame)
+local function Tween(targetPos)
     if not LocalPlayer.Character then return end
     local HRP = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
     if not HRP then return end
 
-    local Distance = (HRP.Position - targetCFrame.Position).Magnitude
-    local Time = Distance / getgenv().Config.TweenSpeed
+    local Distance = (HRP.Position - targetPos).Magnitude
+    local Time = Distance / getgenv().Config.Speed
     
     local Info = TweenInfo.new(Time, Enum.EasingStyle.Linear)
-    CurrentTween = TweenService:Create(HRP, Info, {CFrame = targetCFrame})
     
+    if CurrentTween then CurrentTween:Cancel() end
+    CurrentTween = TweenService:Create(HRP, Info, {CFrame = CFrame.new(targetPos)})
     CurrentTween:Play()
     
-    -- Noclip (Đi xuyên tường) khi đang bay
-    local Noclip
-    Noclip = RunService.Stepped:Connect(function()
-        if not getgenv().Config.AutoChest then 
-            if CurrentTween then CurrentTween:Cancel() end
-            Noclip:Disconnect()
-            return
-        end
-        
-        for _, v in pairs(LocalPlayer.Character:GetDescendants()) do
-            if v:IsA("BasePart") then v.CanCollide = false end
-        end
+    -- Chờ bay xong hoặc bị hủy
+    local Completed = false
+    local Con
+    Con = CurrentTween.Completed:Connect(function()
+        Completed = true
+        Con:Disconnect()
     end)
     
-    CurrentTween.Completed:Wait()
-    Noclip:Disconnect()
+    -- Vòng lặp chờ (Break nếu tắt tool)
+    while not Completed and getgenv().Config.AutoChest do
+        task.wait()
+    end
 end
 
--- // 4. HÀM TÌM RƯƠNG //
-local function GetChest()
-    local list = {}
+-- // 4. LOGIC CHÍNH //
+local function GetNearestChest()
+    local HRP = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not HRP then return nil end
+    
+    local nearest = nil
+    local minDist = math.huge
+    
     for _, v in pairs(Workspace:GetDescendants()) do
         if v.Name:find("Chest") and v:IsA("Part") and v:FindFirstChild("TouchInterest") then
-            table.insert(list, v)
-        end
-    end
-    
-    -- Tìm cái gần nhất
-    local nearest = nil
-    local minDst = math.huge
-    local myPos = LocalPlayer.Character.HumanoidRootPart.Position
-    
-    for _, chest in pairs(list) do
-        local dst = (chest.Position - myPos).Magnitude
-        if dst < minDst then
-            minDst = dst
-            nearest = chest
+            -- Kiểm tra xem rương đã mở chưa (Transparency = 0 là chưa mở)
+            if v.Transparency < 1 then
+                local dist = (v.Position - HRP.Position).Magnitude
+                if dist < minDist then
+                    minDist = dist
+                    nearest = v
+                end
+            end
         end
     end
     return nearest
 end
 
--- // 5. VÒNG LẶP CHÍNH //
+-- Hàm đổi đảo (Khi hết rương)
+local function HopToNextIsland()
+    CurrentIslandIndex = CurrentIslandIndex + 1
+    if CurrentIslandIndex > #IslandList then CurrentIslandIndex = 1 end
+    
+    local NextIsland = IslandList[CurrentIslandIndex]
+    Status.Text = "Đang đến đảo: " .. NextIsland.Name
+    
+    -- 1. Thử dùng Cổng Dịch Chuyển (Nhanh nhất)
+    local args = {
+        [1] = "requestEntrance",
+        [2] = NextIsland.Pos
+    }
+    
+    pcall(function()
+        CommF:InvokeServer(unpack(args))
+    end)
+    
+    task.wait(0.5)
+    
+    -- 2. Nếu cổng không hoạt động -> Bay thường
+    local HRP = LocalPlayer.Character.HumanoidRootPart
+    if (HRP.Position - NextIsland.Pos).Magnitude > 1000 then
+        -- Bay cao lên trời trước khi sang đảo khác
+        Tween(Vector3.new(HRP.Position.X, 300, HRP.Position.Z)) 
+        Tween(Vector3.new(NextIsland.Pos.X, 300, NextIsland.Pos.Z))
+    end
+end
+
+-- Vòng lặp xử lý
 task.spawn(function()
     while task.wait() do
         if getgenv().Config.AutoChest then
             pcall(function()
-                local Chest = GetChest()
+                local Chest = GetNearestChest()
+                
                 if Chest then
-                    Tween(Chest.CFrame)
+                    Status.Text = "Nhặt: " .. Chest.Name
+                    
+                    -- Logic bay thông minh:
+                    -- Bay thẳng đến vị trí rương (CFrame gốc)
+                    -- Nhưng giữ độ cao 1 chút để không bị chui xuống đất
+                    
+                    if (LocalPlayer.Character.HumanoidRootPart.Position - Chest.Position).Magnitude > 50 then
+                        -- Nếu ở xa: Bay cao hơn mặt nước
+                        local FlyPos = Vector3.new(Chest.Position.X, math.max(Chest.Position.Y, getgenv().Config.WaterHeight), Chest.Position.Z)
+                        Tween(FlyPos)
+                    else
+                        -- Nếu ở gần: Lao thẳng vào
+                        Tween(Chest.Position)
+                    end
                 else
-                    -- Hết rương thì đợi chút hoặc đổi server
-                    -- (Bạn có thể thêm code Hop Server vào đây)
+                    -- Hết rương -> Đổi đảo
+                    Status.Text = "Đảo này hết rương! Đang đổi..."
+                    HopToNextIsland()
+                    task.wait(getgenv().Config.HopDelay)
                 end
             end)
+        else
+            if CurrentTween then CurrentTween:Cancel() end
+            Status.Text = "Trạng thái: Đã dừng"
         end
+    end
+end)
+
+-- // XỬ LÝ NÚT BẤM //
+ToggleBtn.MouseButton1Click:Connect(function()
+    getgenv().Config.AutoChest = not getgenv().Config.AutoChest
+    if getgenv().Config.AutoChest then
+        ToggleBtn.Text = "🟢 BẬT (ON)"
+        ToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
+    else
+        ToggleBtn.Text = "🔴 TẮT (OFF)"
+        ToggleBtn.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
     end
 end)
