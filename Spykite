@@ -1,100 +1,116 @@
 --[[ 
-    UI TREE SCANNER - QUÉT CẤU TRÚC MENU
-    Chức năng: Vẽ lại bản đồ giao diện (Tab -> Mục -> Nút) ra file .txt
+    UI CLONER - MÁY PHOTOCOPY GIAO DIỆN
+    Chức năng: Sao chép toàn bộ giao diện Hub đang bật thành code Lua
 ]]
 
-local FileName = "TEDDY_UI_STRUCTURE.txt"
-local CoreGui = game:GetService("CoreGui")
-local PlayerGui = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+local FileName = "CLONED_UI.lua"
+local IgnoreList = {"RobloxGui", "TopBar", "CoreScripts", "Chat", "BubbleChat"}
 
 game:GetService("StarterGui"):SetCore("SendNotification", {
-    Title = "ĐANG QUÉT UI...",
-    Text = "Vui lòng đợi giây lát...",
-    Duration = 3
+    Title = "ĐANG SAO CHÉP UI...",
+    Text = "Vui lòng đợi, đang quét cấu trúc...",
+    Duration = 5
 })
 
--- Hàm tạo khoảng trắng (để thụt đầu dòng cho đẹp)
-local function Indent(count)
-    return string.rep("   |", count) .. "-- "
+-- Hàm chuyển đổi giá trị sang chuỗi Code
+local function ValToStr(v)
+    if typeof(v) == "UDim2" then
+        return string.format("UDim2.new(%.3f, %d, %.3f, %d)", v.X.Scale, v.X.Offset, v.Y.Scale, v.Y.Offset)
+    elseif typeof(v) == "Color3" then
+        return string.format("Color3.new(%.3f, %.3f, %.3f)", v.R, v.G, v.B)
+    elseif typeof(v) == "Vector2" then
+        return string.format("Vector2.new(%.1f, %.1f)", v.X, v.Y)
+    elseif typeof(v) == "string" then
+        return '"' .. v .. '"'
+    elseif typeof(v) == "EnumItem" then
+        return tostring(v)
+    else
+        return tostring(v)
+    end
 end
 
-local Output = "=== BẢN ĐỒ GIAO DIỆN SCRIPT ===\n"
-Output = Output .. "Time: " .. os.date("%X") .. "\n\n"
+-- Hàm tạo tên biến hợp lệ (Bỏ ký tự lạ)
+local function CleanName(name)
+    return name:gsub("[^%w_]", "") .. "_" .. math.random(100,999)
+end
 
--- Hàm đệ quy: Quét sâu vào bên trong từng Frame
-local function ScanObject(obj, depth)
-    local info = Indent(depth) .. "[" .. obj.ClassName .. "] " .. obj.Name
+local SourceCode = "-- [UI CLONED BY GEMINI]\n\nlocal ScreenGui = Instance.new('ScreenGui')\nScreenGui.Parent = game.CoreGui\n\n"
+
+-- Hàm đệ quy quét UI
+local function ScanElement(obj, parentName)
+    local myName = CleanName(obj.Name)
     
-    -- Nếu là nút hoặc nhãn, lấy thêm nội dung chữ
-    if obj:IsA("TextButton") or obj:IsA("TextLabel") or obj:IsA("TextBox") then
-        if obj.Text ~= "" then
-            info = info .. "  (Text: \"" .. obj.Text .. "\")"
-        end
+    -- Viết code tạo đối tượng
+    SourceCode = SourceCode .. string.format("local %s = Instance.new('%s')\n", myName, obj.ClassName)
+    SourceCode = SourceCode .. string.format("%s.Name = '%s'\n", myName, obj.Name)
+    SourceCode = SourceCode .. string.format("%s.Parent = %s\n", myName, parentName)
+    
+    -- Sao chép các thuộc tính quan trọng
+    local props = {
+        "Size", "Position", "BackgroundColor3", "BackgroundTransparency", 
+        "BorderSizePixel", "Visible", "ZIndex", "Text", "TextColor3", 
+        "TextSize", "Font", "Image", "ImageColor3", "CanvasSize"
+    }
+    
+    for _, prop in pairs(props) do
+        pcall(function()
+            if obj[prop] ~= nil then
+                local val = ValToStr(obj[prop])
+                SourceCode = SourceCode .. string.format("%s.%s = %s\n", myName, prop, val)
+            end
+        end)
     end
+    SourceCode = SourceCode .. "\n"
     
-    Output = Output .. info .. "\n"
-    
-    -- Quét tiếp con cái bên trong
+    -- Quét con
     for _, child in pairs(obj:GetChildren()) do
-        -- Lọc bớt các thành phần trang trí không cần thiết (UICorner, UIListLayout...)
-        if not child:IsA("UIBase") and not child:IsA("LocalScript") then 
-            ScanObject(child, depth + 1)
-        end
+        ScanElement(child, myName)
     end
 end
 
+-- BẮT ĐẦU QUÉT
 task.spawn(function()
     local Found = false
     
-    -- 1. Quét trong CoreGui (Nơi Hub thường ẩn nấp)
-    for _, v in pairs(CoreGui:GetDescendants()) do
-        -- Tìm ScreenGui nào KHÔNG PHẢI của Roblox
+    -- Tìm Menu trong CoreGui (Nơi Hub hay trốn)
+    for _, v in pairs(game:GetService("CoreGui"):GetDescendants()) do
         if v:IsA("ScreenGui") and v.Enabled then
-            if not string.find(v.Name, "Roblox") and not string.find(v.Name, "CoreScripts") and not string.find(v.Name, "TopBar") then
-                
-                -- Chỉ quét nếu nó có vẻ là một cái Menu (Có Frame con)
-                if #v:GetChildren() > 0 then
-                    Output = Output .. "==========================================\n"
-                    Output = Output .. "PHÁT HIỆN MENU: " .. v.Name .. "\n"
-                    Output = Output .. "==========================================\n"
-                    ScanObject(v, 0)
-                    Found = true
-                end
+            -- Kiểm tra xem có phải Hub không (Dựa vào số lượng nút)
+            local btnCount = 0
+            for _, b in pairs(v:GetDescendants()) do
+                if b:IsA("TextButton") then btnCount = btnCount + 1 end
+            end
+            
+            -- Lọc rác hệ thống
+            local isIgnored = false
+            for _, ignore in pairs(IgnoreList) do
+                if string.find(v.Name, ignore) then isIgnored = true break end
+            end
+            
+            -- Nếu có trên 5 nút và không phải rác -> LÀ NÓ!
+            if btnCount > 5 and not isIgnored then
+                SourceCode = SourceCode .. "-- UI SOURCE: " .. v.Name .. "\n"
+                ScanElement(v, "ScreenGui")
+                Found = true
             end
         end
     end
     
-    -- 2. Quét trong PlayerGui (Đề phòng Hub lởm)
-    for _, v in pairs(PlayerGui:GetChildren()) do
-        if v:IsA("ScreenGui") and v.Name ~= "Chat" and v.Name ~= "BubbleChat" and v.Name ~= "Freecam" then
-             -- Kiểm tra sơ bộ xem có phải Hub không (thường Hub sẽ có nhiều nút)
-             local btnCount = 0
-             for _, b in pairs(v:GetDescendants()) do if b:IsA("TextButton") then btnCount = btnCount + 1 end end
-             
-             if btnCount > 5 then -- Nếu có trên 5 nút thì nghi là Hub
-                Output = Output .. "\n[PlayerGui] MENU NGHI VẤN: " .. v.Name .. "\n"
-                ScanObject(v, 0)
-                Found = true
-             end
-        end
-    end
-
-    -- KẾT QUẢ
     if Found then
-        writefile(FileName, Output)
+        writefile(FileName, SourceCode)
         
         game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "QUÉT XONG!",
-            Text = "Đã lưu bản đồ giao diện vào file: " .. FileName,
+            Title = "✅ SAO CHÉP XONG!",
+            Text = "Đã lưu code tạo UI vào: " .. FileName,
             Duration = 10
         })
         
-        -- Copy vào bộ nhớ tạm luôn
-        setclipboard(Output)
+        -- Copy vào bộ nhớ tạm luôn cho Sếp
+        setclipboard(SourceCode)
     else
         game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "KHÔNG TÌM THẤY",
-            Text = "Không thấy giao diện nào khả nghi.",
+            Title = "⚠️ KHÔNG TÌM THẤY",
+            Text = "Không thấy giao diện nào giống Hub cả.",
             Duration = 5
         })
     end
