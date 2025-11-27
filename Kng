@@ -1,0 +1,90 @@
+--[[ 
+    BLOX FRUITS DATA LEECHER - HÚT DỮ LIỆU SẠCH TỪ RAM
+    Chức năng: Tìm kiếm Quest, Mob, Tọa độ đảo từ các script mã hóa
+]]
+
+local FileName = "TEDDY_DECRYPTED_DATA.txt"
+local Output = "=== DỮ LIỆU ĐÃ GIẢI MÃ TỪ BỘ NHỚ ===\n\n"
+local FoundCount = 0
+
+game:GetService("StarterGui"):SetCore("SendNotification", {
+    Title = "ĐANG HÚT DỮ LIỆU...",
+    Text = "Vui lòng đợi, đang quét RAM...",
+    Duration = 5
+})
+
+-- Hàm làm sạch giá trị để lưu file
+local function Clean(v)
+    if typeof(v) == "CFrame" then
+        return string.format("CFrame.new(%.1f, %.1f, %.1f)", v.Position.X, v.Position.Y, v.Position.Z)
+    elseif typeof(v) == "Vector3" then
+        return string.format("Vector3.new(%.1f, %.1f, %.1f)", v.X, v.Y, v.Z)
+    elseif type(v) == "table" then
+        return "{...}"
+    else
+        return tostring(v)
+    end
+end
+
+-- Hàm nhận diện dữ liệu Blox Fruits
+-- (Script Farm nào cũng phải có những cái này)
+local function IsFarmData(tbl)
+    if type(tbl) ~= "table" then return false end
+    
+    -- Kiểm tra xem bảng có chứa dữ liệu Quest/Mob không
+    -- Các từ khóa phổ biến mà Dev thường dùng
+    local keys = {"Mon", "Mob", "Name", "Quest", "Level", "Enemy", "CFrame"}
+    local matches = 0
+    
+    for k, v in pairs(tbl) do
+        for _, key in pairs(keys) do
+            if string.find(tostring(k), key) or string.find(tostring(v), key) then
+                matches = matches + 1
+            end
+        end
+        -- Nếu bảng chứa CFrame (Tọa độ) -> Khả năng cao là dữ liệu đảo/quái
+        if typeof(v) == "CFrame" or typeof(v) == "Vector3" then
+            matches = matches + 1
+        end
+    end
+    
+    return matches >= 3 -- Nếu khớp 3 dấu hiệu trở lên thì LẤY
+end
+
+task.spawn(function()
+    if not getgc then return end
+    
+    -- Quét toàn bộ object trong RAM
+    for _, v in pairs(getgc(true)) do
+        if type(v) == "table" and not rawget(v, "RobloxLocked") then
+            if IsFarmData(v) then
+                FoundCount = FoundCount + 1
+                Output = Output .. "--- [DATA #" .. FoundCount .. "] ---\n"
+                
+                for k, val in pairs(v) do
+                    pcall(function()
+                         Output = Output .. "   [" .. tostring(k) .. "] = " .. Clean(val) .. "\n"
+                    end)
+                end
+                Output = Output .. "\n"
+            end
+        end
+    end
+    
+    if FoundCount > 0 then
+        writefile(FileName, Output)
+        setclipboard(Output) -- Copy luôn cho tiện
+        
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = "✅ THÀNH CÔNG!",
+            Text = "Đã hút được " .. FoundCount .. " bảng dữ liệu.\nFile: " .. FileName,
+            Duration = 10
+        })
+    else
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = "❌ KHÔNG TÌM THẤY",
+            Text = "Script giấu dữ liệu quá kỹ hoặc chưa nạp xong.",
+            Duration = 5
+        })
+    end
+end)
