@@ -1,148 +1,148 @@
---[[ 
-    DATA MINER V5.5 - TURBO MODE
-    Chức năng: Quét siêu nhanh, hiển thị số nhảy liên tục, không bao giờ đứng hình.
+--[[
+    💎 AUTO CHEST V2 - GUI CONTROL
+    Chức năng: Có nút Bật/Tắt trên màn hình, tìm rương gần nhất, bay mượt.
 ]]
 
-local FileName = "TEDDY_DEEP_DATA.txt"
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
+local CoreGui = game:GetService("CoreGui")
+local Workspace = game:GetService("Workspace")
 
--- 1. GIAO DIỆN ĐƠN GIẢN HÓA (ĐỂ ĐỠ LAG)
+local LocalPlayer = Players.LocalPlayer
+local CurrentTween = nil -- Biến để lưu tween đang chạy (để hủy khi tắt)
+
+getgenv().Config = {
+    AutoChest = false,
+    TweenSpeed = 300
+}
+
+-- // 1. TẠO GIAO DIỆN (GUI) //
 local ScreenGui = Instance.new("ScreenGui")
 local Frame = Instance.new("Frame")
 local Title = Instance.new("TextLabel")
-local Status = Instance.new("TextLabel")
-local CountLabel = Instance.new("TextLabel")
+local ToggleBtn = Instance.new("TextButton")
+local UICorner = Instance.new("UICorner")
 
-if gethui then ScreenGui.Parent = gethui() else ScreenGui.Parent = game.CoreGui end
-ScreenGui.Name = "MinerV5_5"
+-- Tìm nơi gắn GUI an toàn
+if gethui then ScreenGui.Parent = gethui() else ScreenGui.Parent = CoreGui end
+ScreenGui.Name = "AutoChestGUI"
 
+-- Khung chính
 Frame.Parent = ScreenGui
-Frame.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
-Frame.Position = UDim2.new(0.5, -125, 0.1, 0)
-Frame.Size = UDim2.new(0, 250, 0, 100)
-Frame.BorderSizePixel = 2
-Frame.BorderColor3 = Color3.fromRGB(255, 255, 0) -- Viền vàng
+Frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+Frame.Position = UDim2.new(0.1, 0, 0.3, 0)
+Frame.Size = UDim2.new(0, 200, 0, 120)
+Frame.Active = true
+Frame.Draggable = true -- Cho phép kéo thả
 
+-- Tiêu đề
 Title.Parent = Frame
+Title.BackgroundColor3 = Color3.fromRGB(255, 170, 0)
 Title.Size = UDim2.new(1, 0, 0, 30)
-Title.BackgroundTransparency = 1
-Title.Text = "⚡ TURBO SCANNER ⚡"
-Title.TextColor3 = Color3.new(1, 1, 0)
 Title.Font = Enum.Font.SourceSansBold
+Title.Text = "AUTO CHEST"
+Title.TextColor3 = Color3.new(1,1,1)
 Title.TextSize = 18
 
-Status.Parent = Frame
-Status.Position = UDim2.new(0, 0, 0, 35)
-Status.Size = UDim2.new(1, 0, 0, 25)
-Status.BackgroundTransparency = 1
-Status.Text = "Đang khởi động..."
-Status.TextColor3 = Color3.new(1,1,1)
-Status.TextSize = 14
+-- Nút Bật/Tắt
+ToggleBtn.Parent = Frame
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(255, 50, 50) -- Màu đỏ (Tắt)
+ToggleBtn.Position = UDim2.new(0.1, 0, 0.4, 0)
+ToggleBtn.Size = UDim2.new(0.8, 0, 0.4, 0)
+ToggleBtn.Font = Enum.Font.SourceSansBold
+ToggleBtn.Text = "TRẠNG THÁI: TẮT 🔴"
+ToggleBtn.TextColor3 = Color3.new(1,1,1)
+ToggleBtn.TextSize = 16
 
-CountLabel.Parent = Frame
-CountLabel.Position = UDim2.new(0, 0, 0, 60)
-CountLabel.Size = UDim2.new(1, 0, 0, 30)
-CountLabel.BackgroundTransparency = 1
-CountLabel.Text = "0 / 0"
-CountLabel.TextColor3 = Color3.fromRGB(0, 255, 255) -- Xanh dương
-CountLabel.Font = Enum.Font.Code
-CountLabel.TextSize = 16
+local btnCorner = Instance.new("UICorner", ToggleBtn)
+btnCorner.CornerRadius = UDim.new(0, 8)
 
--- 2. HÀM LÀM SẠCH DỮ LIỆU
-local function Clean(v)
-    if typeof(v) == "CFrame" then 
-        return string.format("Pos(%.0f,%.0f,%.0f)", v.Position.X, v.Position.Y, v.Position.Z)
-    elseif typeof(v) == "Vector3" then 
-        return string.format("Vec3(%.0f,%.0f,%.0f)", v.X, v.Y, v.Z)
-    elseif type(v) == "table" then 
-        return "{Table}"
-    else 
-        return tostring(v) 
-    end
-end
-
--- 3. HÀM TÌM KIẾM (TARGET)
-local function IsTarget(val)
-    if type(val) == "string" then
-        if string.find(val, "Bandit") or string.find(val, "Quest") or string.find(val, "Tushita") or string.find(val, "GodHuman") then
-            return true
-        end
-    elseif type(val) == "table" then
-        for k, v in pairs(val) do
-            if tostring(k) == "Mon" or tostring(k) == "CFrameQuest" then return true end
-        end
-    end
-    return false
-end
-
--- 4. LOGIC QUÉT (CHẠY TRONG THREAD RIÊNG)
-task.spawn(function()
-    if not getgc then
-        Status.Text = "LỖI: Executor yếu!"
-        return
-    end
-
-    Status.Text = "Đang tải dữ liệu RAM..."
-    RunService.Heartbeat:Wait()
-
-    -- Lấy danh sách (Bước này có thể khựng 1 chút)
-    local gcObjects = getgc() 
-    local total = #gcObjects
-    local output = "=== DỮ LIỆU QUÉT ĐƯỢC ===\n\n"
-    local found = 0
-    local scanned = 0
+-- // 2. LOGIC XỬ LÝ NÚT BẤM //
+ToggleBtn.MouseButton1Click:Connect(function()
+    getgenv().Config.AutoChest = not getgenv().Config.AutoChest
     
-    Status.Text = "Đang quét tốc độ cao..."
-
-    for i, v in pairs(gcObjects) do
-        scanned = scanned + 1
-        
-        -- Cập nhật giao diện mỗi 200 item (Để thấy số nhảy liên tục)
-        if scanned % 200 == 0 then
-            CountLabel.Text = scanned .. " / " .. total
-            RunService.Heartbeat:Wait() -- Nghỉ cực ngắn để UI không bị đơ
-        end
-
-        -- Bọc trong pcall để nếu lỗi 1 cái thì không chết cả tool
-        pcall(function()
-            if type(v) == "function" and islclosure(v) and not is_synapse_function(v) then
-                local upvalues = debug.getupvalues(v)
-                for k, val in pairs(upvalues) do
-                    if IsTarget(val) then
-                        found = found + 1
-                        output = output .. "-- [HÀM #" .. i .. "]\n"
-                        if type(val) == "table" then
-                            for subK, subV in pairs(val) do
-                                output = output .. "   " .. tostring(subK) .. ": " .. Clean(subV) .. "\n"
-                            end
-                        else
-                            output = output .. "   Val: " .. Clean(val) .. "\n"
-                        end
-                        output = output .. "\n"
-                    end
-                end
-            end
-        end)
-    end
-    
-    if found > 0 then
-        writefile(FileName, output)
-        Status.Text = "✅ HOÀN TẤT!"
-        Status.TextColor3 = Color3.new(0,1,0)
-        CountLabel.Text = "Tìm thấy: " .. found .. " dữ liệu"
-        Frame.BorderColor3 = Color3.new(0,1,0)
-        
-        -- Nút Đóng
-        local close = Instance.new("TextButton", Frame)
-        close.Size = UDim2.new(1,0,1,0)
-        close.BackgroundTransparency = 1
-        close.Text = ""
-        close.MouseButton1Click:Connect(function() ScreenGui:Destroy() end)
+    if getgenv().Config.AutoChest then
+        ToggleBtn.Text = "TRẠNG THÁI: BẬT 🟢"
+        ToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100) -- Xanh lá
     else
-        Status.Text = "⚠️ KHÔNG TÌM THẤY!"
-        Status.TextColor3 = Color3.new(1,0,0)
-        CountLabel.Text = "Hãy chắc chắn Teddy Hub đang chạy."
-        wait(5)
-        ScreenGui:Destroy()
+        ToggleBtn.Text = "TRẠNG THÁI: TẮT 🔴"
+        ToggleBtn.BackgroundColor3 = Color3.fromRGB(255, 50, 50) -- Đỏ
+        
+        -- Dừng ngay lập tức khi tắt
+        if CurrentTween then CurrentTween:Cancel() end
+    end
+end)
+
+-- // 3. HÀM BAY (TWEEN) //
+local function Tween(targetCFrame)
+    if not LocalPlayer.Character then return end
+    local HRP = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not HRP then return end
+
+    local Distance = (HRP.Position - targetCFrame.Position).Magnitude
+    local Time = Distance / getgenv().Config.TweenSpeed
+    
+    local Info = TweenInfo.new(Time, Enum.EasingStyle.Linear)
+    CurrentTween = TweenService:Create(HRP, Info, {CFrame = targetCFrame})
+    
+    CurrentTween:Play()
+    
+    -- Noclip (Đi xuyên tường) khi đang bay
+    local Noclip
+    Noclip = RunService.Stepped:Connect(function()
+        if not getgenv().Config.AutoChest then 
+            if CurrentTween then CurrentTween:Cancel() end
+            Noclip:Disconnect()
+            return
+        end
+        
+        for _, v in pairs(LocalPlayer.Character:GetDescendants()) do
+            if v:IsA("BasePart") then v.CanCollide = false end
+        end
+    end)
+    
+    CurrentTween.Completed:Wait()
+    Noclip:Disconnect()
+end
+
+-- // 4. HÀM TÌM RƯƠNG //
+local function GetChest()
+    local list = {}
+    for _, v in pairs(Workspace:GetDescendants()) do
+        if v.Name:find("Chest") and v:IsA("Part") and v:FindFirstChild("TouchInterest") then
+            table.insert(list, v)
+        end
+    end
+    
+    -- Tìm cái gần nhất
+    local nearest = nil
+    local minDst = math.huge
+    local myPos = LocalPlayer.Character.HumanoidRootPart.Position
+    
+    for _, chest in pairs(list) do
+        local dst = (chest.Position - myPos).Magnitude
+        if dst < minDst then
+            minDst = dst
+            nearest = chest
+        end
+    end
+    return nearest
+end
+
+-- // 5. VÒNG LẶP CHÍNH //
+task.spawn(function()
+    while task.wait() do
+        if getgenv().Config.AutoChest then
+            pcall(function()
+                local Chest = GetChest()
+                if Chest then
+                    Tween(Chest.CFrame)
+                else
+                    -- Hết rương thì đợi chút hoặc đổi server
+                    -- (Bạn có thể thêm code Hop Server vào đây)
+                end
+            end)
+        end
     end
 end)
