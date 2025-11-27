@@ -1,9 +1,9 @@
 --[[
-    💎 AUTO CHEST V14 - FIX RƠI NƯỚC & ÉP NHẶT
-    Chức năng: 
-    - Tạo sàn ảo đỡ nhân vật (Không bao giờ rơi).
-    - Dùng lệnh 'firetouchinterest' để nhặt rương ngay lập tức.
+    💎 AUTO CHEST V17 - FULL CONTROL
+    Chức năng: Farm Rương + Nhặt Trái + Nút Auto Hop riêng biệt + Nút Xóa Script
 ]]
+
+getgenv().ChestV17_Running = true
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -21,42 +21,76 @@ local CommF = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CommF_")
 -- // CẤU HÌNH //
 getgenv().Config = {
     AutoChest = false,       
-    AutoHop = true,
+    AutoHop = true,          -- Mặc định bật
     AutoFruit = true,
     Speed = 300,
     HopDelay = 2
 }
 
-local PlatformPart = nil -- Biến lưu cái sàn ảo
+local CurrentTween = nil
 
--- // 1. GIAO DIỆN ICON (NHỎ GỌN) //
+-- // 1. HỆ THỐNG UNLOAD //
+local function UnloadScript()
+    getgenv().ChestV17_Running = false
+    getgenv().Config.AutoChest = false
+    if CurrentTween then CurrentTween:Cancel() end
+    
+    if gethui then
+        if gethui():FindFirstChild("ChestV17_GUI") then gethui().ChestV17_GUI:Destroy() end
+    else
+        if CoreGui:FindFirstChild("ChestV17_GUI") then CoreGui.ChestV17_GUI:Destroy() end
+    end
+    
+    if LocalPlayer.Character then
+        for _, v in pairs(LocalPlayer.Character:GetDescendants()) do
+            if v:IsA("BasePart") then v.CanCollide = true end
+        end
+        if LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            LocalPlayer.Character.HumanoidRootPart.Velocity = Vector3.new(0,0,0)
+            LocalPlayer.Character.HumanoidRootPart.Anchored = false
+        end
+    end
+    
+    pcall(function()
+        if Workspace.Map:FindFirstChild("WaterBase-Plane") then
+            Workspace.Map["WaterBase-Plane"].CanCollide = false
+        end
+    end)
+end
+
+-- // 2. GIAO DIỆN (GUI) //
+UnloadScript() -- Xóa bản cũ
+getgenv().ChestV17_Running = true
+
 local ScreenGui = Instance.new("ScreenGui")
 local OpenBtn = Instance.new("ImageButton")
 local MainFrame = Instance.new("Frame")
 local Title = Instance.new("TextLabel")
 local ToggleBtn = Instance.new("TextButton")
+local HopBtn = Instance.new("TextButton") -- NÚT HOP MỚI
+local UnloadBtn = Instance.new("TextButton")
 local Status = Instance.new("TextLabel")
 local UICorner = Instance.new("UICorner")
 
 if gethui then ScreenGui.Parent = gethui() else ScreenGui.Parent = CoreGui end
-ScreenGui.Name = "ChestV14_FixWater"
+ScreenGui.Name = "ChestV17_GUI"
 
--- Nút Mở Menu (Hình tròn)
+-- Icon
 OpenBtn.Parent = ScreenGui
 OpenBtn.Position = UDim2.new(0, 20, 0.4, 0)
 OpenBtn.Size = UDim2.new(0, 50, 0, 50)
 OpenBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-OpenBtn.Image = "rbxassetid://9267242786" -- Icon Rương
+OpenBtn.Image = "rbxassetid://9267242786"
 OpenBtn.Active = true
 OpenBtn.Draggable = true
 Instance.new("UICorner", OpenBtn).CornerRadius = UDim.new(1, 0)
 Instance.new("UIStroke", OpenBtn).Color = Color3.fromRGB(255, 255, 0)
 
--- Bảng Menu
+-- Menu
 MainFrame.Parent = ScreenGui
-MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
 MainFrame.Position = UDim2.new(0.2, 0, 0.2, 0)
-MainFrame.Size = UDim2.new(0, 250, 0, 180)
+MainFrame.Size = UDim2.new(0, 260, 0, 250) -- Cao hơn để chứa thêm nút
 MainFrame.Visible = false
 MainFrame.Active = true
 MainFrame.Draggable = true
@@ -66,117 +100,141 @@ Instance.new("UIStroke", MainFrame).Color = Color3.fromRGB(0, 255, 255)
 Title.Parent = MainFrame
 Title.BackgroundColor3 = Color3.fromRGB(0, 150, 200)
 Title.Size = UDim2.new(1, 0, 0, 30)
-Title.Text = "CHEST V14 (FIX WATER)"
+Title.Text = "AUTO CHEST V17"
 Title.TextColor3 = Color3.new(1,1,1)
 Title.Font = Enum.Font.SourceSansBold
 Title.TextSize = 16
 Instance.new("UICorner", Title).CornerRadius = UDim.new(0, 10)
 
+-- Nút Farm
 ToggleBtn.Parent = MainFrame
-ToggleBtn.Position = UDim2.new(0.1, 0, 0.3, 0)
-ToggleBtn.Size = UDim2.new(0.8, 0, 0.3, 0)
+ToggleBtn.Position = UDim2.new(0.1, 0, 0.18, 0)
+ToggleBtn.Size = UDim2.new(0.8, 0, 0.18, 0)
 ToggleBtn.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
 ToggleBtn.Text = "🔴 FARM: TẮT"
 ToggleBtn.Font = Enum.Font.SourceSansBold
-ToggleBtn.TextSize = 18
+ToggleBtn.TextSize = 16
 ToggleBtn.TextColor3 = Color3.new(1,1,1)
-Instance.new("UICorner", ToggleBtn).CornerRadius = UDim.new(0, 8)
+Instance.new("UICorner", ToggleBtn).CornerRadius = UDim.new(0, 6)
+
+-- Nút Hop (MỚI)
+HopBtn.Parent = MainFrame
+HopBtn.Position = UDim2.new(0.1, 0, 0.40, 0)
+HopBtn.Size = UDim2.new(0.8, 0, 0.18, 0)
+HopBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100) -- Mặc định là Bật
+HopBtn.Text = "🟢 HOP: BẬT"
+HopBtn.Font = Enum.Font.SourceSansBold
+HopBtn.TextSize = 16
+HopBtn.TextColor3 = Color3.new(1,1,1)
+Instance.new("UICorner", HopBtn).CornerRadius = UDim.new(0, 6)
+
+-- Nút Xóa
+UnloadBtn.Parent = MainFrame
+UnloadBtn.Position = UDim2.new(0.1, 0, 0.62, 0)
+UnloadBtn.Size = UDim2.new(0.8, 0, 0.15, 0)
+UnloadBtn.BackgroundColor3 = Color3.fromRGB(100, 0, 0)
+UnloadBtn.Text = "🗑️ XÓA SCRIPT"
+UnloadBtn.Font = Enum.Font.SourceSansBold
+UnloadBtn.TextSize = 14
+UnloadBtn.TextColor3 = Color3.new(1,1,1)
+Instance.new("UICorner", UnloadBtn).CornerRadius = UDim.new(0, 6)
 
 Status.Parent = MainFrame
 Status.BackgroundTransparency = 1
-Status.Position = UDim2.new(0, 10, 0.7, 0)
+Status.Position = UDim2.new(0, 10, 0.8, 0)
 Status.Size = UDim2.new(1, -20, 0.2, 0)
 Status.TextColor3 = Color3.new(1,1,0)
 Status.Text = "Sẵn sàng..."
 Status.TextWrapped = true
-Status.TextSize = 13
+Status.TextSize = 12
+Status.Font = Enum.Font.Code
 
--- Đóng/Mở Menu
+-- Event Menu
 OpenBtn.MouseButton1Click:Connect(function() MainFrame.Visible = not MainFrame.Visible end)
+UnloadBtn.MouseButton1Click:Connect(function() UnloadScript() end)
 
--- // 2. HỆ THỐNG "SÀN ẢO" (FIX RƠI NƯỚC) //
-local function CreatePlatform()
-    if PlatformPart then return end
-    PlatformPart = Instance.new("Part", Workspace)
-    PlatformPart.Name = "AntiFallPlatform"
-    PlatformPart.Size = Vector3.new(10, 1, 10)
-    PlatformPart.Anchored = true
-    PlatformPart.CanCollide = true
-    PlatformPart.Transparency = 0.5
-    PlatformPart.Color = Color3.fromRGB(0, 255, 255)
-    PlatformPart.Material = Enum.Material.Neon
-end
-
-local function RemovePlatform()
-    if PlatformPart then 
-        PlatformPart:Destroy() 
-        PlatformPart = nil
-    end
-end
-
--- Cập nhật vị trí sàn liên tục dưới chân nhân vật
-RunService.Heartbeat:Connect(function()
-    if getgenv().Config.AutoChest and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-        if not PlatformPart then CreatePlatform() end
-        
-        local HRP = LocalPlayer.Character.HumanoidRootPart
-        -- Sàn luôn nằm dưới chân 3.5 đơn vị
-        PlatformPart.CFrame = CFrame.new(HRP.Position.X, HRP.Position.Y - 3.5, HRP.Position.Z)
-    else
-        RemovePlatform()
+-- // 3. LOGIC //
+task.spawn(function()
+    while getgenv().ChestV17_Running and task.wait(1) do
+        pcall(function()
+            local WaterBase = Workspace.Map:FindFirstChild("WaterBase-Plane")
+            if WaterBase then
+                WaterBase.Size = Vector3.new(100000, 112, 100000)
+                WaterBase.CanCollide = true
+                WaterBase.Transparency = 0.5
+            end
+        end)
     end
 end)
 
--- // 3. HỆ THỐNG ÉP NHẶT (FIRE TOUCH) //
 local function ForceTouch(target)
     if not target then return end
-    -- Cách 1: Dùng firetouchinterest (Nếu Executor hỗ trợ)
-    pcall(function()
-        if firetouchinterest then
-            firetouchinterest(LocalPlayer.Character.HumanoidRootPart, target, 0) -- Chạm
-            task.wait(0.01)
-            firetouchinterest(LocalPlayer.Character.HumanoidRootPart, target, 1) -- Bỏ chạm
-        end
-    end)
-    -- Cách 2: Dịch chuyển vật lý sát vào (Dự phòng)
-    if LocalPlayer.Character then
+    if firetouchinterest then
+        firetouchinterest(LocalPlayer.Character.HumanoidRootPart, target, 0)
+        task.wait(0.01)
+        firetouchinterest(LocalPlayer.Character.HumanoidRootPart, target, 1)
+    else
         LocalPlayer.Character.HumanoidRootPart.CFrame = target.CFrame
     end
 end
 
--- // 4. HỆ THỐNG BAY (TWEEN) //
 local function Tween(targetCFrame)
     if not LocalPlayer.Character then return end
     local HRP = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    
     local Distance = (HRP.Position - targetCFrame.Position).Magnitude
     local Time = Distance / getgenv().Config.Speed
     local Info = TweenInfo.new(Time, Enum.EasingStyle.Linear)
     
-    local T = TweenService:Create(HRP, Info, {CFrame = targetCFrame})
-    T:Play()
+    if CurrentTween then CurrentTween:Cancel() end
+    CurrentTween = TweenService:Create(HRP, Info, {CFrame = targetCFrame})
+    CurrentTween:Play()
     
-    -- Noclip khi bay
+    local Completed = false
+    local Con = CurrentTween.Completed:Connect(function() Completed = true; Con:Disconnect() end)
+    
     local NoclipLoop = RunService.Stepped:Connect(function()
+        if not getgenv().ChestV17_Running then return end
         if LocalPlayer.Character then
             for _, v in pairs(LocalPlayer.Character:GetDescendants()) do
                 if v:IsA("BasePart") then v.CanCollide = false end
             end
         end
+        if (HRP.Position - targetCFrame.Position).Magnitude < 5 then
+            if CurrentTween then CurrentTween:Cancel() end
+            Completed = true
+        end
     end)
     
-    T.Completed:Wait()
-    NoclipLoop:Disconnect()
+    while not Completed and getgenv().Config.AutoChest and getgenv().ChestV17_Running do task.wait() end
+    if NoclipLoop then NoclipLoop:Disconnect() end
 end
 
--- // 5. HỆ THỐNG HOP SERVER (FIXED) //
+local function GetFruit()
+    for _, v in pairs(Workspace:GetChildren()) do
+        if (string.find(v.Name, "Fruit") or v:IsA("Tool")) and v:FindFirstChild("Handle") then
+            return v
+        end
+    end
+    return nil
+end
+
+local function GetChest()
+    local HRP = LocalPlayer.Character.HumanoidRootPart
+    local nearest, minDist = nil, math.huge
+    for _, v in pairs(Workspace:GetDescendants()) do
+        if v.Name:find("Chest") and v:IsA("Part") and v:FindFirstChild("TouchInterest") and v.Transparency < 0.8 then
+            local dist = (v.Position - HRP.Position).Magnitude
+            if dist < minDist then minDist = dist; nearest = v end
+        end
+    end
+    return nearest
+end
+
 local function HopServer()
-    Status.Text = "⏳ Đang tìm Server mới..."
+    Status.Text = "⏳ Đổi Server..."
     local PlaceID = game.PlaceId
     local AllIDs = {}
     local foundAnything = ""
-    local actualHour = os.date("!*t").hour
-    
     local function TPReturner()
         local Site;
         if foundAnything == "" then
@@ -184,129 +242,88 @@ local function HopServer()
         else
             Site = HttpService:JSONDecode(game:HttpGet('https://games.roblox.com/v1/games/' .. PlaceID .. '/servers/Public?sortOrder=Asc&limit=100&cursor=' .. foundAnything))
         end
-        
         if Site.nextPageCursor and Site.nextPageCursor ~= "null" and Site.nextPageCursor ~= nil then
             foundAnything = Site.nextPageCursor
         end
-        
         for i,v in pairs(Site.data) do
-            local Possible = true
-            local ID = tostring(v.id)
-            if tonumber(v.maxPlayers) > tonumber(v.playing) then
-                for _,Existing in pairs(AllIDs) do
-                    if num ~= 0 then
-                        if ID == tostring(Existing) then Possible = false end
-                    else
-                        if tonumber(actualHour) ~= tonumber(Existing) then
-                            local delFile = pcall(function()
-                                delfile("NotSameServers.json")
-                                AllIDs = {}
-                                table.insert(AllIDs, actualHour)
-                            end)
-                        end
-                    end
-                    num = num + 1
-                end
-                if Possible == true then
-                    table.insert(AllIDs, ID)
-                    wait()
-                    pcall(function()
-                        Status.Text = "🚀 Đang vào Server: " .. ID
-                        TeleportService:TeleportToPlaceInstance(PlaceID, ID, LocalPlayer)
-                    end)
-                    wait(4)
-                end
+            if v.playing < v.maxPlayers and v.id ~= game.JobId then
+                table.insert(AllIDs, v.id)
             end
         end
     end
-    TPReturner() 
-end
-
--- // 6. LOGIC TÌM KIẾM //
-local function GetChest()
-    local list = {}
-    -- Quét Workspace
-    for _, v in pairs(Workspace:GetDescendants()) do
-        if v.Name:find("Chest") and v:IsA("Part") and v:FindFirstChild("TouchInterest") and v.Transparency < 0.8 then
-            table.insert(list, v)
+    pcall(function()
+        TPReturner()
+        if #AllIDs > 0 then
+            TeleportService:TeleportToPlaceInstance(PlaceID, AllIDs[math.random(1, #AllIDs)], LocalPlayer)
         end
-    end
-    -- Tìm cái gần nhất
-    local nearest, minDst = nil, math.huge
-    local myPos = LocalPlayer.Character.HumanoidRootPart.Position
-    for _, chest in pairs(list) do
-        local dst = (chest.Position - myPos).Magnitude
-        if dst < minDst then minDst = dst; nearest = chest end
-    end
-    return nearest
+    end)
 end
 
-local function GetFruit()
-    for _, v in pairs(Workspace:GetChildren()) do
-        if string.find(v.Name, "Fruit") and v:FindFirstChild("Handle") then
-            return v
-        end
-    end
-    return nil
-end
-
--- // 7. VÒNG LẶP CHÍNH //
+-- MAIN LOOP
 task.spawn(function()
-    while task.wait() do
+    while task.wait() and getgenv().ChestV17_Running do
         if getgenv().Config.AutoChest then
             pcall(function()
-                -- 1. Ưu tiên Fruit
+                -- 1. Nhặt trái
                 local Fruit = GetFruit()
                 if Fruit and getgenv().Config.AutoFruit then
-                    Status.Text = "🔥 NHẶT TRÁI: " .. Fruit.Name
+                    Status.Text = "🔥 FRUIT: " .. Fruit.Name
+                    Status.TextColor3 = Color3.fromRGB(255, 0, 0)
                     Tween(Fruit.Handle.CFrame)
-                    ForceTouch(Fruit.Handle) -- Ép nhặt
+                    ForceTouch(Fruit.Handle)
                     task.wait(0.5)
-                    -- Cất trái
-                    local args = {[1] = "StoreFruit",[2] = "Blox Fruit",[3] = Fruit}
-                    CommF:InvokeServer(unpack(args))
+                    CommF:InvokeServer("StoreFruit", "Blox Fruit", Fruit)
                 else
-                    -- 2. Farm Chest
+                    -- 2. Nhặt Rương
                     local Chest = GetChest()
                     if Chest then
-                        Status.Text = "💰 Nhặt: " .. Chest.Name
-                        
-                        -- Bay tới
-                        if (LocalPlayer.Character.HumanoidRootPart.Position - Chest.Position).Magnitude > 100 then
-                             -- Bay cao 50m để không đâm vào núi
-                            Tween(CFrame.new(Chest.Position) * CFrame.new(0, 50, 0)) 
-                        end
+                        Status.Text = "💰 Chest: " .. Chest.Name
+                        Status.TextColor3 = Color3.new(1,1,1)
                         Tween(Chest.CFrame)
-                        
-                        -- ÉP NHẶT
-                        ForceTouch(Chest) 
+                        ForceTouch(Chest)
                     else
-                        -- Hết rương -> Hop Server
-                        Status.Text = "Hết rương! Đổi Server..."
+                        -- 3. Đổi Server (Nếu nút Hop đang BẬT)
                         if getgenv().Config.AutoHop then
+                            Status.Text = "Hết rương! Hop..."
                             HopServer()
                             task.wait(5)
+                        else
+                            Status.Text = "Hết rương! (Đang đợi spawn...)"
+                            Status.TextColor3 = Color3.fromRGB(255, 255, 0)
                         end
                     end
                 end
             end)
         else
-            RemovePlatform()
+            if CurrentTween then CurrentTween:Cancel() end
+            Status.Text = "Đang dừng."
         end
     end
 end)
 
+-- XỬ LÝ NÚT BẤM
 ToggleBtn.MouseButton1Click:Connect(function()
     getgenv().Config.AutoChest = not getgenv().Config.AutoChest
     if getgenv().Config.AutoChest then
-        ToggleBtn.Text = "🟢 BẬT (ON)"
+        ToggleBtn.Text = "🟢 FARM: BẬT"
         ToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
     else
-        ToggleBtn.Text = "🔴 TẮT (OFF)"
+        ToggleBtn.Text = "🔴 FARM: TẮT"
         ToggleBtn.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
     end
 end)
 
--- Anti-AFK
+HopBtn.MouseButton1Click:Connect(function()
+    getgenv().Config.AutoHop = not getgenv().Config.AutoHop
+    if getgenv().Config.AutoHop then
+        HopBtn.Text = "🟢 HOP: BẬT"
+        HopBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
+    else
+        HopBtn.Text = "🔴 HOP: TẮT"
+        HopBtn.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+    end
+end)
+
+-- Anti AFK
 VirtualUser:CaptureController()
 LocalPlayer.Idled:Connect(function() VirtualUser:ClickButton2(Vector2.new()) end)
